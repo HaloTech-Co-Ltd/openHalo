@@ -35,8 +35,8 @@ make && make install
 #### Server Setup
 - Create User & User Group
 ```sh
-groupadd –g 1000 halo
-useradd –u 1000 –g halo halo
+groupadd -g 1000 halo
+useradd -u 1000 -g halo halo
 ```
 
 - Setup Environment Variables
