@@ -1482,6 +1482,7 @@ CloseServerPorts(int status, Datum arg)
 	 * the sockets and before removing lock files.
 	 */
 	RemoveSocketFiles();
+	RemoveSocketFiles2();
 
 	/*
 	 * We don't do anything about socket lock files here; those will be

@@ -3996,6 +3996,23 @@ setupAFUnix(const char *sockPath)
 	return STATUS_OK;
 }
 
+void
+RemoveSocketFiles2(void)
+{
+	ListCell   *l;
+
+	/* Loop through all created sockets... */
+	foreach(l, sockPaths)
+	{
+		char	   *sock_path = (char *) lfirst(l);
+
+		/* Ignore any error. */
+		(void) unlink(sock_path);
+	}
+	/* Since we're about to exit, no need to reclaim storage */
+	sockPaths = NIL;
+}
+
 static void
 closeSocket(int code, Datum arg)
 {
