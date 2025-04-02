@@ -117,13 +117,13 @@ getENV(PG_FUNCTION_ARGS)
     char *envValue = NULL;
     if (PG_ARGISNULL(0))
         ereport(ERROR,
-            (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-             errmsg("environment variable must not be null")));
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("environment variable must not be null")));
     
     varName = TextDatumGetCString(PG_GETARG_DATUM(0));
     envValue = getenv(varName);
     if (envValue == NULL)
-        elog(ERROR, "The environment variable %s is not set.", varName);
+        elog(ERROR, "The environment variable %s is not set yet.", varName);
 
     PG_RETURN_TEXT_P(cstring_to_text(getEnvValue(varName)));
 }
