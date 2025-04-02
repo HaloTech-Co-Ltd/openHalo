@@ -79,7 +79,7 @@ void sendOKPacket(void);
 void sendErrorPacket(int errCode, const char* errMsg);
 void getCaseInsensitiveId(void);
 void mys_setCurrentPreStmtColumnInfo(int currentPreStmtColumnIndex, Oid currentPreStmtColumnType);
-void RemoveSocketFiles2(void);
+void CloseServerPorts2(int status, Datum arg);
 
 
 #endif                          /* ADAPTER_H */

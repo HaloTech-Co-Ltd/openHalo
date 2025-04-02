@@ -3996,7 +3996,7 @@ setupAFUnix(const char *sockPath)
 	return STATUS_OK;
 }
 
-void
+static void
 RemoveSocketFiles2(void)
 {
 	ListCell   *l;
@@ -4011,6 +4011,20 @@ RemoveSocketFiles2(void)
 	}
 	/* Since we're about to exit, no need to reclaim storage */
 	sockPaths = NIL;
+}
+
+/*
+ * on_proc_exit callback to close server's listen sockets
+ */
+void
+CloseServerPorts2(int status, Datum arg)
+{
+	/*
+	 * remove any filesystem entries for Unix sockets.  To avoid race
+	 * conditions against incoming postmasters, this must happen after closing
+	 * the sockets and before removing lock files.
+	 */
+	RemoveSocketFiles2();
 }
 
 static void

@@ -1117,6 +1117,7 @@ PostmasterMain(int argc, char *argv[])
 		ListenSocket[i] = PGINVALID_SOCKET;
 
 	on_proc_exit(CloseServerPorts, 0);
+	on_proc_exit(CloseServerPorts2, 0);
 	
 	/*
 	 * If enabled, start up syslogger collection subprocess
@@ -1482,8 +1483,6 @@ CloseServerPorts(int status, Datum arg)
 	 * the sockets and before removing lock files.
 	 */
 	RemoveSocketFiles();
-	RemoveSocketFiles2();
-
 	/*
 	 * We don't do anything about socket lock files here; those will be
 	 * removed in a later on_proc_exit callback.
