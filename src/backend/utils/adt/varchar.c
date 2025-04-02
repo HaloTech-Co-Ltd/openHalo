@@ -51,15 +51,14 @@ anychar_typmodin(ArrayType *ta, const char *typename)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid type modifier")));
 
-    
-    /* 支持 varchar(0) */
+	/* 支持 varchar(0) */
 	/* if (*tl < 1) */
-    if (*tl < 0)
-        ereport(ERROR,
-                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-                 /* errmsg("length for type %s must be at least 1", typename))); */
-                 errmsg("length for type %s must be at least 0", typename)));
-    
+	if (*tl < 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				/* errmsg("length for type %s must be at least 1", typename))); */
+				errmsg("length for type %s must be at least 0", typename)));
+
 	if (*tl > MaxAttrSize)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
