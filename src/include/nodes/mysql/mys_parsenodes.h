@@ -45,7 +45,7 @@ typedef struct SysVarRef
 typedef struct MysVariableSetStmt
 {
     NodeTag type;
-    Node *varSetStmt;   /* 目前是SelectStmt */
+    Node *varSetStmt;   /* 鐩墠鏄疭electStmt */
 } MysVariableSetStmt;
 
 
@@ -53,7 +53,7 @@ typedef struct MysSelectIntoStmt
 {
     NodeTag type;
     List *target;
-    Node *expr;   /* 目前是SelectStmt */
+    Node *expr;   /* 鐩墠鏄疭electStmt */
 } MysSelectIntoStmt;
 
 
