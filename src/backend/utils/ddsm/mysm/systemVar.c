@@ -125,5 +125,5 @@ getENV(PG_FUNCTION_ARGS)
     if (envValue == NULL)
         elog(ERROR, "The environment variable %s is not set yet.", varName);
 
-    PG_RETURN_TEXT_P(cstring_to_text(getEnvValue(varName)));
+    PG_RETURN_TEXT_P(cstring_to_text(envValue));
 }
