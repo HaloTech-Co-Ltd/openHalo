@@ -1044,7 +1044,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
              (qc->commandTag == CMDTAG_ALTER_SEQUENCE) || 
              (qc->commandTag == CMDTAG_ALTER_VIEW) || 
              (qc->commandTag == CMDTAG_ALTER_INDEX) || 
-             (qc->commandTag == CMDTAG_ALTER_SEQUENCE) || 
+             (qc->commandTag == CMDTAG_ALTER_SYSTEM) || 
              (qc->commandTag == CMDTAG_ALTER_CONSTRAINT) || 
              (qc->commandTag == CMDTAG_ALTER_TRIGGER) || 
              (qc->commandTag == CMDTAG_COMMENT) || 
