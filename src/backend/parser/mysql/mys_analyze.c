@@ -498,7 +498,6 @@ mys_construct_returningList(ParseState *pstate, InsertStmt *stmt)
     constr = tupledesc->constr;
     //namespaceId = ((Form_pg_class)(resultRelation->rd_rel))->relnamespace;
 
-    // Haloʹ������ʵ��Mysql���������У���nextval('seqName'::regclass)��Ϊ�ֶε�Ĭ��ֵ
     if ((constr == NULL) || (constr != NULL && constr->num_defval <= 0))
     {
         return;
