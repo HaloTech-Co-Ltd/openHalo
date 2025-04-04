@@ -252,6 +252,7 @@ static bool check_recovery_target_lsn(char **newval, void **extra, GucSource sou
 static void assign_recovery_target_lsn(const char *newval, void *extra);
 static bool check_primary_slot_name(char **newval, void **extra, GucSource source);
 static bool check_default_with_oids(bool *newval, void **extra, GucSource source);
+static bool check_halo_mysql_version(char **newval, void **extra, GucSource source);
 
 /* Private functions in guc-file.l that need to be called from guc.c */
 static ConfigVariable *ProcessConfigFileInternal(GucContext context,
@@ -3973,9 +3974,9 @@ static struct config_string ConfigureNamesString[] =
             gettext_noop("Sets the mysql version the server support."),
             NULL
         },
-        &halo_mysql_version,
+        &halo_mysql_version, 
         "5.7.32-log",
-        NULL, NULL, NULL
+        check_halo_mysql_version, NULL, NULL
     },
 
     
@@ -12731,6 +12732,27 @@ check_default_with_oids(bool *newval, void **extra, GucSource source)
 		return false;
 	}
 
+	return true;
+}
+
+static bool
+check_halo_mysql_version(char **newval, void **extra, GucSource source)
+{
+	char *version_str = psprintf("%s MySQL Server (GPL)", *newval);
+	if (((strncmp(*newval, "5.7", 2) < 0) ||
+		 (strncmp(*newval, "8.0", 2) < 0)) &&
+		 (strlen(version_str) > 45))
+	{
+		GUC_check_errdetail("The \"mysql.halo_mysql_version\" is too long.");
+		return false;
+	}
+	else if (strlen(version_str) > 255)
+	{
+		GUC_check_errdetail("The \"mysql.halo_mysql_version\" is too long.");
+		return false;
+	}
+
+	pfree(version_str);
 	return true;
 }
 
