@@ -26,7 +26,7 @@ openHalo supports commonly used SQL dialect and communication protocol of MySQL.
 - uuid is mandatory.
 
 ```sh
-./configure --prefix=/home/halo/openhalo/1.0 --enable-debug --with-uuid=ossp CFLAGS=-O2
+./configure --prefix=/home/halo/openhalo/1.0 --enable-debug --with-uuid=ossp --with-icu CFLAGS=-O2
 make && make install
 cd contrib
 make && make install
