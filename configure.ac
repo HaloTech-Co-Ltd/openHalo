@@ -842,14 +842,6 @@ AC_MSG_RESULT([$with_python])
 AC_SUBST(with_python)
 
 #
-# Optionally build SM3 algorithm support
-#
-AC_MSG_CHECKING([whether to build SM3 algorithm support])
-PGAC_ARG_BOOL(with, sm3, yes, [do not use SM3 algorithm support])
-AC_MSG_RESULT([$with_sm3])
-AC_SUBST(with_sm3)
-
-#
 # GSSAPI
 #
 AC_MSG_CHECKING([whether to build with GSSAPI support])
@@ -1151,10 +1143,6 @@ fi
 if test "$with_python" = yes; then
   PGAC_PATH_PYTHON
   PGAC_CHECK_PYTHON_EMBED_SETUP
-fi
-
-if test "$with_sm3" = no; then
-  AC_DEFINE_UNQUOTED(OPENSSL_NO_SM3, [1], [no SM3 algorithm support])
 fi
 
 if test x"$cross_compiling" = x"yes" && test -z "$with_system_tzdata"; then
