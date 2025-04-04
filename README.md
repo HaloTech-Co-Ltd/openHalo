@@ -81,6 +81,50 @@ mysql -P 3306 -h 127.0.0.1
 ```
 ![image](openhalo_q1.png)
 
+- Enable remote login with mysql CLI
+
+postgresql.conf
+```
+...
+listen_addresses = '*'              # what IP address(es) to listen on;
+                                    # comma-separated list of addresses;
+                                    # defaults to 'localhost'; use '*' for all
+                                    # (change requires restart)
+...
+```
+
+```sh
+pg_ctl restart 
+```
+
+pg_hba.conf
+```
+...
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            trust
+host    all             all             0/0                     md5
+...
+```
+
+```sh
+pg_ctl reload 
+```
+
+```sql
+psql -p 5432
+
+set password_encryption=mysql_native_password;
+
+create user test password 'test';
+
+select * from pg_shadow where usename='test';
+
+```
+
+```sh
+mysql -P 3306 -h <Server IP> -utest -p
+```
+
 Halo, HaloBase are trademarks of Halo Tech Co.,Ltd. <br/>
 openHalo is a trademark of Halo Tech Co.,Ltd. <br/>
 openHalo official website: https://www.openhalo.org
