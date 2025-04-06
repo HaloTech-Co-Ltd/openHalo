@@ -3974,7 +3974,7 @@ static struct config_string ConfigureNamesString[] =
             gettext_noop("Sets the mysql version the server support."),
             NULL
         },
-        &halo_mysql_version, 
+        &halo_mysql_version,
         "5.7.32-log",
         check_halo_mysql_version, NULL, NULL
     },
