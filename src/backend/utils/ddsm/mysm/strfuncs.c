@@ -404,7 +404,6 @@ check_set(PG_FUNCTION_ARGS)
         ++items1Num;
     }
 
-    // Mys��֧��set�������ڲ��ж���
     i = 0;
     j = i;
     k = 0;

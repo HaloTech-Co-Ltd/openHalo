@@ -717,7 +717,6 @@ with_ldap
 with_krb_srvnam
 krb_srvtab
 with_gssapi
-with_sm3
 with_python
 with_perl
 with_tcl
@@ -852,7 +851,6 @@ with_tcl
 with_tclconfig
 with_perl
 with_python
-with_sm3
 with_gssapi
 with_krb_srvnam
 with_pam
@@ -1558,7 +1556,6 @@ Optional Packages:
   --with-tclconfig=DIR    tclConfig.sh is in DIR
   --with-perl             build Perl modules (PL/Perl)
   --with-python           build Python modules (PL/Python)
-  --without-sm3           do not use SM3 algorithm support
   --with-gssapi           build with GSSAPI support
   --with-krb-srvnam=NAME  default service principal name in Kerberos (GSSAPI)
                           [halo]
@@ -8368,39 +8365,6 @@ $as_echo "$with_python" >&6; }
 
 
 #
-# Optionally build SM3 algorithm support
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build SM3 algorithm support" >&5
-$as_echo_n "checking whether to build SM3 algorithm support... " >&6; }
-
-
-
-# Check whether --with-sm3 was given.
-if test "${with_sm3+set}" = set; then :
-  withval=$with_sm3;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-sm3 option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_sm3=yes
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_sm3" >&5
-$as_echo "$with_sm3" >&6; }
-
-
-#
 # GSSAPI
 #
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with GSSAPI support" >&5
@@ -10680,14 +10644,6 @@ python_additional_libs=`${PYTHON} -c "import sysconfig; print(' '.join(filter(No
 $as_echo "${python_libspec} ${python_additional_libs}" >&6; }
 
 
-
-fi
-
-if test "$with_sm3" = no; then
-
-cat >>confdefs.h <<_ACEOF
-#define OPENSSL_NO_SM3 1
-_ACEOF
 
 fi
 

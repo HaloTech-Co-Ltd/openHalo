@@ -1,6 +1,6 @@
 #-------------------------------------------------------------------------
 #
-# Makefile for MySQL Compatibal Parser
+# Makefile for MySQL Compatible Parser
 #
 # src/backend/parser/mysql/Makefile
 #

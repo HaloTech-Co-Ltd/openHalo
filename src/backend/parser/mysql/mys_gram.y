@@ -4,7 +4,7 @@
 /*-------------------------------------------------------------------------
  *
  * mys_gram.y
- *	  MySQL Compatibal BISON rules/actions
+ *	  MySQL Compatible BISON rules/actions
  *
  * Portions Copyright (c) 2021, Jet C.X. ZHANG
  * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
@@ -16,7 +16,7 @@
  *
  * HISTORY
  *	  AUTHOR			DATE			MAJOR EVENT
- *    Jet C.X. ZHANG    Mar, 2021       SQL to MySQL Compatibal
+ *    Jet C.X. ZHANG    Mar, 2021       SQL to MySQL Compatible
  *	  Andrew Yu			Sept, 1994		POSTQUEL to SQL conversion
  *	  Andrew Yu			Oct, 1994		lispy code conversion
  *

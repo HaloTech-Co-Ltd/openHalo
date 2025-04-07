@@ -2,7 +2,7 @@
 /*-------------------------------------------------------------------------
  *
  * mys_parser.c
- *	  Main entry point/driver for MySQL COMPATIBAL grammar
+ *	  Main entry point/driver for MySQL COMPATIBLE grammar
  *
  * 
  * 版权所有 (c) 2019-2025, 易景科技保留所有权利。

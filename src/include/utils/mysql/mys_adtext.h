@@ -52,7 +52,7 @@
 #include "utils/adtextapi.h"
 
 /*
- * ADT Extra for Oracle compatibal
+ * ADT Extra for Oracle Compatible
  */
 extern const ADTExtMethod *GetMysADTExt(void);
 

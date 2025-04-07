@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * mys_adtext.c
- *		Extension for Mysql compatibal
+ *		Extension for MySQL Compatible
  *
  *
  * Copyright (c) 2021, Jet C.X. ZHANG
