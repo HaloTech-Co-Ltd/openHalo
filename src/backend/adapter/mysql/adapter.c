@@ -1025,6 +1025,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
         sessionStateChanged = 0;
     }
     else if ((qc->commandTag == CMDTAG_CREATE_DATABASE) || 
+             (qc->commandTag == CMDTAG_CREATE_ROLE) || 
              (qc->commandTag == CMDTAG_CREATE_SCHEMA) || 
              (qc->commandTag == CMDTAG_CREATE_TABLE) || 
              (qc->commandTag == CMDTAG_CREATE_TABLE_AS) || 
@@ -1049,6 +1050,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
              (qc->commandTag == CMDTAG_ALTER_TRIGGER) || 
              (qc->commandTag == CMDTAG_COMMENT) || 
              (qc->commandTag == CMDTAG_DROP_DATABASE) || 
+             (qc->commandTag == CMDTAG_DROP_ROLE) || 
              (qc->commandTag == CMDTAG_DROP_SCHEMA) || 
              (qc->commandTag == CMDTAG_DROP_TABLE) || 
              (qc->commandTag == CMDTAG_DROP_DOMAIN) || 
