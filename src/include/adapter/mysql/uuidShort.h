@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * uuidShort.h
- *	  MySQL adapter errorConvertor routines
+ *	  MySQL adapter uuidShort routines
  *
  * 
  * 版权所有 (c) 2019-2025, 易景科技保留所有权利。
