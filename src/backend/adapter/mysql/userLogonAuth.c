@@ -134,21 +134,12 @@ assembleHandshakePacketPayload(const char* haloMysVersion,
         capability_flags_1 |= MYS_CLT_SSL;
     }
 
-    if (strncmp(haloMysVersion, "5.7", 2) < 0)
-    {
-        server_version = "5.6.40-log";
+    if ((strncmp(haloMysVersion, "5.7", 3) < 0) || (strncmp(haloMysVersion, "8.0", 3) < 0))
         character_set = 45;
-    }
-    else if (strncmp(haloMysVersion, "8.0", 2) < 0)
-    {
-        server_version = "5.7.32-log";
-        character_set = 45;
-    }
     else 
-    {
-        server_version = "8.0.30";
         character_set = 255;
-    }
+
+    server_version = pstrdup(haloMysVersion);
     server_version_len = (int)strlen(server_version);
     auth_plugin_data_part2_len = 13;
     auth_plugin_name_len = (int)strlen(auth_plugin_name);
@@ -208,7 +199,7 @@ assembleHandshakePacketPayload(const char* haloMysVersion,
 
     payloadLen = payload_index;
     memset((payloadBuf + payloadLen), '\0', (payloadBufLen - payloadLen));
-
+    pfree(server_version);
     return payloadLen;
 }
 
