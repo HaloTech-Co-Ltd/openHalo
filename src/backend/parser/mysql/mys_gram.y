@@ -2716,7 +2716,7 @@ VariableShowStmt:
 
 					$$ = (Node *)selectStmt;
                 }
-            | SHOW character_set
+            | SHOW character_set where_clause
                 {
                     /* select * from mys_informa_schema.plugins; */
 					SelectStmt *selectStmt;
@@ -2736,6 +2736,7 @@ VariableShowStmt:
 					selectStmt->targetList = list_make1(resTarget);
 
                     selectStmt->fromClause = list_make1(createRangeVar("mys_informa_schema", "charsets"));
+					selectStmt->whereClause = $3;
 
 					$$ = (Node *)selectStmt;
                 }
