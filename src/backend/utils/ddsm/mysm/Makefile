@@ -13,6 +13,7 @@ PGFILEDESC	= "MySQL Supplementary Modules - mysm"
 OBJS = \
 	aggregates.o \
 	bpchar.o \
+    common_funcs.o \
 	date_func.o \
 	time_func.o \
 	timestamp_func.o \
