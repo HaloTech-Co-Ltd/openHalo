@@ -1040,6 +1040,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
              (qc->commandTag == CMDTAG_CREATE_CONSTRAINT) || 
              (qc->commandTag == CMDTAG_CREATE_TRIGGER) || 
              (qc->commandTag == CMDTAG_ALTER_DATABASE) || 
+             (qc->commandTag == CMDTAG_ALTER_ROLE) || 
              (qc->commandTag == CMDTAG_ALTER_SCHEMA) || 
              (qc->commandTag == CMDTAG_ALTER_TABLE) || 
              (qc->commandTag == CMDTAG_ALTER_SEQUENCE) || 
