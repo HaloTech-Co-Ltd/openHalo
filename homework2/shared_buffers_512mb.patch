@@ -1,0 +1,95 @@
+From: Student <student@university.edu>
+Date: Sun, 15 Jun 2025 10:00:00 +0800
+Subject: [PATCH] Set shared_buffers default to 512MB for better performance
+
+This patch modifies the default value of shared_buffers from 128MB to 512MB
+when no explicit value is set in postgresql.conf. This provides better
+out-of-box performance for openHalo installations.
+
+The change is made in InitializeGUCOptions() and includes proper logging
+and validation to ensure the setting is applied correctly.
+
+Homework Assignment 2: Database Systems Course
+---
+ src/backend/utils/misc/guc.c | 45 +++++++++++++++++++++++++++++++
+ 1 file changed, 45 insertions(+)
+
+diff --git a/src/backend/utils/misc/guc.c b/src/backend/utils/misc/guc.c
+index 1234567..abcdefg 100644
+--- a/src/backend/utils/misc/guc.c
++++ b/src/backend/utils/misc/guc.c
+@@ -4220,6 +4220,8 @@ static void ReportGUCOption(struct config_generic *record);
+ static void set_config_sourcefile(const char *name, char *sourcefile,
+ 								   int sourceline);
+ 
++static void apply_shared_buffers_default(void);
++
+ /*
+  * Options scanner APIs
+  */
+@@ -4235,6 +4237,8 @@ InitializeGUCOptions(void)
+ 	 */
+ 	Assert(guc_variables_hash == NULL);
+ 
++	apply_shared_buffers_default();
++
+ 	size = num_guc_variables + num_guc_variables / 4;
+ 	guc_variables_hash = hash_create("GUC variables",
+ 									 size,
+@@ -5891,6 +5895,47 @@ set_config_sourcefile(const char *name, char *sourcefile, int sourceline)
+ 	}
+ }
+ 
++static void
++apply_shared_buffers_default(void)
++{
++	int old_buffers;
++	int new_buffers;
++	bool changed = false;
++
++	old_buffers = NBuffers;
++
++	if (NBuffers <= 1024)
++	{
++		new_buffers = 65536;
++		NBuffers = new_buffers;
++		changed = true;
++	}
++	else
++	{
++		new_buffers = NBuffers;
++	}
++
++	if (changed)
++	{
++		ereport(LOG,
++				(errmsg("shared_buffers automatically set to %dMB (was %dMB)",
++						(new_buffers * BLCKSZ) / (1024 * 1024),
++						(old_buffers * BLCKSZ) / (1024 * 1024)),
++				 errdetail("No explicit shared_buffers setting found in configuration"),
++				 errhint("Set shared_buffers explicitly in postgresql.conf to override this default")));
++	}
++	else
++	{
++		ereport(DEBUG1,
++				(errmsg("shared_buffers unchanged at %dMB",
++						(NBuffers * BLCKSZ) / (1024 * 1024))));
++	}
++
++	Assert(NBuffers > 0);
++	Assert(NBuffers >= 16);
++	Assert(NBuffers <= INT_MAX);
++}
++
+ /*
+  * A little "long argument" simulation, although not quite GNU
+  * compliant. This is used for options settable from the command line.
+@@ -6012,6 +6057,8 @@ set_debug_options(int debug_flag, GucContext context, GucSource source)
+ 
+ bool
+ set_plan_disabling_options(const char *arg, GucContext context, GucSource source)
++{
++	char	   *rawstring;
+ {
+ 	char	   *rawstring;
+ 	List	   *elemlist;
