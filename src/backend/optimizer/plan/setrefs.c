@@ -505,6 +505,15 @@ add_rte_to_flat_rtable(PlannerGlobal *glob, RangeTblEntry *rte)
 	newrte->coltypmods = NIL;
 	newrte->colcollations = NIL;
 	newrte->securityQuals = NIL;
+	
+	/*
+	 * Also, if it's a subquery RTE, lose the relid that may have been kept to
+	 * signal that it had been a view.  We don't want that to escape the
+	 * planner, mainly because doing so breaks -DWRITE_READ_PARSE_PLAN_TREES
+	 * testing thanks to outfuncs/readfuncs not preserving it.
+	 */
+	if (newrte->rtekind == RTE_SUBQUERY)
+		newrte->relid = InvalidOid;
 
 	glob->finalrtable = lappend(glob->finalrtable, newrte);
 
@@ -1571,6 +1580,12 @@ set_append_references(PlannerInfo *root,
 				PartitionedRelPruneInfo *pinfo = lfirst(l2);
 
 				pinfo->rtindex += rtoffset;
+				pinfo->initial_pruning_steps =
+					fix_scan_list(root, pinfo->initial_pruning_steps,
+								  rtoffset, 1);
+				pinfo->exec_pruning_steps =
+					fix_scan_list(root, pinfo->exec_pruning_steps,
+								  rtoffset, 1);
 			}
 		}
 	}
@@ -1643,6 +1658,12 @@ set_mergeappend_references(PlannerInfo *root,
 				PartitionedRelPruneInfo *pinfo = lfirst(l2);
 
 				pinfo->rtindex += rtoffset;
+				pinfo->initial_pruning_steps =
+					fix_scan_list(root, pinfo->initial_pruning_steps,
+								  rtoffset, 1);
+				pinfo->exec_pruning_steps =
+					fix_scan_list(root, pinfo->exec_pruning_steps,
+								  rtoffset, 1);
 			}
 		}
 	}

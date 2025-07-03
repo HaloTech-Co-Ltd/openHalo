@@ -668,14 +668,12 @@ extern ResultRelInfo *ExecLookupResultRelByOid(ModifyTableState *node,
 
 extern const ExecutorRoutine * GetStandardExecutorEngine(void);
 extern void InitPlan(QueryDesc *queryDesc, int eflags);
-extern void ExecutePlan(EState *estate, PlanState *planstate,
-						bool use_parallel_mode,
+extern void ExecutePlan(QueryDesc *queryDesc,
 						CmdType operation,
 						bool sendTuples,
 						uint64 numberTuples,
 						ScanDirection direction,
-						DestReceiver *dest,
-						bool execute_once);
+						DestReceiver *dest);
 extern void ExecPostprocessPlan(EState *estate);
 extern PlanState *standard_ExecInitNode(Plan *node, EState *estate, int eflags);
 extern void standard_ExecEndNode(PlanState *node);
