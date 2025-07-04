@@ -2176,16 +2176,6 @@ static struct config_bool ConfigureNamesBool[] =
 	},
 
 	{
-        {"mysql.ci_collation", PGC_POSTMASTER, CUSTOM_OPTIONS,
-            gettext_noop("Sets the mysql collation is case insensitive or not."),
-            NULL
-        },
-        &halo_mysql_ci_collation,
-        true,
-        NULL, NULL, NULL
-    },
-	
-	{
         {"mysql.explicit_defaults_for_timestamp", PGC_POSTMASTER, CUSTOM_OPTIONS,
             gettext_noop("Sets the mysql explicit_defaults_for_timestamp."),
             NULL

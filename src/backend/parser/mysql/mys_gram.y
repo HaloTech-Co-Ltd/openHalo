@@ -6301,7 +6301,7 @@ TypedTableElement:
 columnDef:	ColId Typename optColumnCompression create_generic_options ColQualList opt_references
 				{
 					ColumnDef *n;
-                    CollateClause *collateClause;
+                    //CollateClause *collateClause;
                     char *typeName;
 					n = makeNode(ColumnDef);
 					n->colname = $1;
@@ -6319,7 +6319,7 @@ columnDef:	ColId Typename optColumnCompression create_generic_options ColQualLis
                     n->collClause = NULL;
 					SplitColQualList($5, &n->constraints, &n->collClause,
 									 yyscanner);
-                    collateClause = NULL;
+                    //collateClause = NULL;
                     typeName = "";
                     if (list_length($2->names) == 1)
                     {
@@ -6329,48 +6329,48 @@ columnDef:	ColId Typename optColumnCompression create_generic_options ColQualLis
                     {
                         typeName = ((Value *)lsecond($2->names))->val.str;
                     }
-                    if ((strncasecmp(typeName, "char", 4) == 0) || 
-                        (strncasecmp(typeName, "bpchar", 6) == 0) || 
-                        (strncasecmp(typeName, "varchar", 7) == 0) || 
-                        (strncasecmp(typeName, "tinytext", 8) == 0) || 
-                        (strncasecmp(typeName, "mediumtext", 10) == 0) || 
-                        (strncasecmp(typeName, "text", 4) == 0) || 
-                        (strncasecmp(typeName, "longtext", 8) == 0))
-                    {
-                        int collateNameVal = 0;
-                        if (n->collClause != NULL)
-                        {
-                            char *collName = strVal(linitial(n->collClause->collname));
-                            int collNameLen = strlen(collName);
-                            if (strncasecmp((collName + (collNameLen - 3)), "_ci", 3) == 0)
-                            {
-                                collateNameVal = 1;
-                            }
-                            else 
-                            {
-                                collateNameVal = 2;
-                            }
-                        }
-                        if (collateNameVal == 0)
-                        {
-                            /* do nothing; */
-                        }
-                        else if (collateNameVal == 1)
-                        {
-                            collateClause = makeNode(CollateClause);
-                            collateClause->arg = NULL;
-                            collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
-                            collateClause->location = @5;
-                        }
-                        else 
-                        {
-                            collateClause = makeNode(CollateClause);
-                            collateClause->arg = NULL;
-                            collateClause->collname = list_make1(makeString(pstrdup("case_sensitive")));
-                            collateClause->location = @5;
-                        }
-                    }
-					n->collClause = collateClause;
+                    //if ((strncasecmp(typeName, "char", 4) == 0) || 
+                    //    (strncasecmp(typeName, "bpchar", 6) == 0) || 
+                    //    (strncasecmp(typeName, "varchar", 7) == 0) || 
+                    //    (strncasecmp(typeName, "tinytext", 8) == 0) || 
+                    //    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
+                    //    (strncasecmp(typeName, "text", 4) == 0) || 
+                    //    (strncasecmp(typeName, "longtext", 8) == 0))
+                    //{
+                    //    int collateNameVal = 0;
+                    //    if (n->collClause != NULL)
+                    //    {
+                    //        char *collName = strVal(linitial(n->collClause->collname));
+                    //        int collNameLen = strlen(collName);
+                    //        if (strncasecmp((collName + (collNameLen - 3)), "_ci", 3) == 0)
+                    //        {
+                    //            collateNameVal = 1;
+                    //        }
+                    //        else 
+                    //        {
+                    //            collateNameVal = 2;
+                    //        }
+                    //    }
+                    //    if (collateNameVal == 0)
+                    //    {
+                    //        /* do nothing; */
+                    //    }
+                    //    else if (collateNameVal == 1)
+                    //    {
+                    //        collateClause = makeNode(CollateClause);
+                    //        collateClause->arg = NULL;
+                    //        collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
+                    //        collateClause->location = @5;
+                    //    }
+                    //    else 
+                    //    {
+                    //        collateClause = makeNode(CollateClause);
+                    //        collateClause->arg = NULL;
+                    //        collateClause->collname = list_make1(makeString(pstrdup("case_sensitive")));
+                    //        collateClause->location = @5;
+                    //    }
+                    //}
+					//n->collClause = collateClause;
 					$$ = (Node *)n;
 				}
         | USER Typename optColumnCompression create_generic_options ColQualList opt_references

@@ -55,7 +55,6 @@
 
 
 extern char *halo_mysql_version;
-extern bool halo_mysql_ci_collation;
 extern int halo_mysql_column_name_case_control;
 extern char* halo_mysql_customized_case_column_names;
 extern bool halo_mysql_explicit_defaults_for_timestamp;
