@@ -819,7 +819,7 @@ bpchareq(PG_FUNCTION_ARGS)
             }
             else
             {
-                if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+                if (collid == caseInsensitiveId)
                 {
                     result = (strncasecmp(str1, str2, str1_len) == 0);
                 }
@@ -944,7 +944,7 @@ bpcharne(PG_FUNCTION_ARGS)
             }
             else
             {
-                if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+                if (collid == caseInsensitiveId)
                 {
                     result = (strncasecmp(str1, str2, str1_len) != 0);
                 }

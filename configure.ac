@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([Halo], [14.10], [halo-bugs@halodbtech.com], [], [https://www.halodbtech.com/])
+AC_INIT([Halo], [14.18], [halo-bugs@halodbtech.com], [], [https://www.halodbtech.com/])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and Halo versions are not
@@ -43,7 +43,7 @@ AC_DEFINE_UNQUOTED(PG_VERSION_PREFIX, "$PG_VERSION_PREFIX", [Halo version prefix
 
 PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version],
              [PG_VERSION="$PACKAGE_VERSION$withval"],
-             [PG_VERSION="$PACKAGE_VERSION"])
+             [PG_VERSION="$PACKAGE_VERSION ("`date +%y%m%d`")"])
 AC_DEFINE_UNQUOTED(PG_VERSION, "$PG_VERSION", [Halo version as a string])
 
 AC_CANONICAL_HOST
@@ -154,12 +154,12 @@ AC_SUBST(enable_nls)
 AC_SUBST(WANTED_LANGUAGES)
 
 #
-# Default port number (--with-pgport), default 5432
+# Default port number (--with-pgport), default 1921
 #
 AC_MSG_CHECKING([for default port number])
-PGAC_ARG_REQ(with, pgport, [PORTNUM], [set default port number [5432]],
+PGAC_ARG_REQ(with, pgport, [PORTNUM], [set default port number [1921]],
              [default_port=$withval],
-             [default_port=5432])
+             [default_port=1921])
 AC_MSG_RESULT([$default_port])
 # Need both of these because some places want an integer and some a string
 AC_DEFINE_UNQUOTED(DEF_PGPORT, ${default_port},
@@ -460,6 +460,26 @@ else
   BITCODE_CXXFLAGS="-O2 $BITCODE_CXXFLAGS"
 fi
 
+# We use C constructs that became invalid in C23.  Check if the compiler
+# reports a standard higher than C17, with the flags selected above (so the
+# user can control the language level explicitly to avoid the gcc/clang-only
+# fallback logic below if preferred).
+AC_MSG_CHECKING([whether $CC reports a C standard higher than ISO C17])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [@%:@if __STDC_VERSION__ > 201710L
+choke me
+@%:@endif])], [POSTC17=no], [POSTC17=yes])
+AC_MSG_RESULT(${POSTC17})
+
+# If a too recent standard was detected with the user's CFLAGS, try asking for
+# C17 with GNU extensions explicitly.
+if test "$POSTC17" = yes; then
+  old_CFLAGS="$CFLAGS"
+  PGAC_PROG_CC_CFLAGS_OPT([-std=gnu17])
+  if test "$CFLAGS" = "$old_CFLAGS"; then
+    AC_MSG_ERROR([cannot proceed])
+  fi
+fi
+
 # C[XX]FLAGS we determined above will be added back at the end
 user_CFLAGS=$CFLAGS
 CFLAGS=""
@@ -564,6 +584,12 @@ if test "$GCC" = yes -a "$ICC" = no; then
   if test -n "$NOT_THE_CFLAGS"; then
     CFLAGS="$CFLAGS -Wno-stringop-truncation"
   fi
+  # Suppress clang 16's strict warnings about function casts
+  NOT_THE_CFLAGS=""
+  PGAC_PROG_CC_VAR_OPT(NOT_THE_CFLAGS, [-Wcast-function-type-strict])
+  if test -n "$NOT_THE_CFLAGS"; then
+    CFLAGS="$CFLAGS -Wno-cast-function-type-strict"
+  fi
 elif test "$ICC" = yes; then
   # Intel's compiler has a bug/misoptimization in checking for
   # division by NAN (NaN == 0), -mp1 fixes it, so add it to the CFLAGS.
@@ -606,6 +632,13 @@ if test "$with_llvm" = yes ; then
 
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, BITCODE_CFLAGS, [-Xclang -no-opaque-pointers])
   PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANGXX, BITCODE_CXXFLAGS, [-Xclang -no-opaque-pointers])
+
+  # Ideally bitcode should perhaps match $CC's use, or not, of outline atomic
+  # functions, but for now we err on the side of suppressing them in bitcode,
+  # because we can't assume they're available at runtime.  This affects aarch64
+  # builds using the basic armv8-a ISA without LSE support.
+  PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANG, BITCODE_CFLAGS, [-mno-outline-atomics])
+  PGAC_PROG_VARCXX_VARFLAGS_OPT(CLANG, BITCODE_CXXFLAGS, [-mno-outline-atomics])
 
   NOT_THE_CFLAGS=""
   PGAC_PROG_VARCC_VARFLAGS_OPT(CLANG, NOT_THE_CFLAGS, [-Wunused-command-line-argument])
@@ -840,6 +873,22 @@ AC_MSG_CHECKING([whether to build Python modules])
 PGAC_ARG_BOOL(with, python, no, [build Python modules (PL/Python)])
 AC_MSG_RESULT([$with_python])
 AC_SUBST(with_python)
+
+#
+# Optionally build SM3 algorithm support
+#
+AC_MSG_CHECKING([whether to build SM3 algorithm support])
+PGAC_ARG_BOOL(with, sm3, yes, [do not use SM3 algorithm support])
+AC_MSG_RESULT([$with_sm3])
+AC_SUBST(with_sm3)
+
+#
+# Optionally build C2 algorithm support
+#
+AC_MSG_CHECKING([whether to build ce algorithm support])
+PGAC_ARG_BOOL(with, c2, yes, [do not use C2 algorithm support])
+AC_MSG_RESULT([$with_c2])
+AC_SUBST(with_c2)
 
 #
 # GSSAPI
@@ -1145,6 +1194,23 @@ if test "$with_python" = yes; then
   PGAC_CHECK_PYTHON_EMBED_SETUP
 fi
 
+if test "$with_sm3" = no; then
+  AC_DEFINE_UNQUOTED(OPENSSL_NO_SM3, [1], [no SM3 algorithm support])
+fi
+
+if test "$with_c2" = no; then
+  AC_DEFINE_UNQUOTED(NO_C2, [1], [no C2 algorithm support])
+fi
+
+#
+# Optionally build HSM
+#
+AC_MSG_CHECKING([whether to build HSM module])
+PGAC_ARG_BOOL(with, hsm, no, [build HSM module],
+              [AC_DEFINE([USE_HSM], 1, [Define to 1 to build HSM module support. (--with-hsm)])])
+AC_MSG_RESULT([$with_hsm])
+AC_SUBST(with_hsm)
+
 if test x"$cross_compiling" = x"yes" && test -z "$with_system_tzdata"; then
   PGAC_PATH_PROGS(ZIC, zic)
   if test -z "$ZIC"; then
@@ -1321,7 +1387,7 @@ if test "$with_ssl" = openssl ; then
   # function was removed.
   AC_CHECK_FUNCS([CRYPTO_lock])
   # Function introduced in OpenSSL 1.1.1.
-  AC_CHECK_FUNCS([X509_get_signature_info])
+  AC_CHECK_FUNCS([X509_get_signature_info SSL_CTX_set_num_tickets])
   AC_DEFINE([USE_OPENSSL], 1, [Define to 1 to build with OpenSSL support. (--with-ssl=openssl)])
 elif test "$with_ssl" != no ; then
   AC_MSG_ERROR([--with-ssl must specify openssl])
@@ -1415,8 +1481,6 @@ AC_SUBST(UUID_LIBS)
 ##
 ## Header files
 ##
-
-AC_HEADER_STDBOOL
 
 AC_CHECK_HEADERS(m4_normalize([
 	atomic.h
@@ -1732,14 +1796,11 @@ if test "$ac_cv_sizeof_off_t" -lt 8 -a "$segsize" != "1"; then
    AC_MSG_ERROR([Large file support is not enabled. Segment size cannot be larger than 1GB.])
 fi
 
-AC_CHECK_SIZEOF([bool], [],
-[#ifdef HAVE_STDBOOL_H
-#include <stdbool.h>
-#endif])
+AC_CHECK_SIZEOF([bool], [], [#include <stdbool.h>])
 
-dnl We use <stdbool.h> if we have it and it declares type bool as having
-dnl size 1.  Otherwise, c.h will fall back to declaring bool as unsigned char.
-if test "$ac_cv_header_stdbool_h" = yes -a "$ac_cv_sizeof_bool" = 1; then
+dnl We use <stdbool.h> if bool has size 1 after including it.  Otherwise, c.h
+dnl will fall back to declaring bool as unsigned char.
+if test "$ac_cv_sizeof_bool" = 1; then
   AC_DEFINE([PG_USE_STDBOOL], 1,
             [Define to 1 to use <stdbool.h> to define type bool.])
 fi
@@ -1783,7 +1844,6 @@ AC_CHECK_FUNCS(m4_normalize([
 	setproctitle_fast
 	setsid
 	shm_open
-	strchrnul
 	strsignal
 	symlink
 	syncfs
@@ -1825,6 +1885,7 @@ AC_CHECK_DECLS([strlcat, strlcpy, strnlen])
 # won't handle deployment target restrictions on macOS
 AC_CHECK_DECLS([preadv], [], [AC_LIBOBJ(preadv)], [#include <sys/uio.h>])
 AC_CHECK_DECLS([pwritev], [], [AC_LIBOBJ(pwritev)], [#include <sys/uio.h>])
+AC_CHECK_DECLS([strchrnul], [], [], [#include <string.h>])
 
 # This is probably only present on macOS, but may as well check always
 AC_CHECK_DECLS(F_FULLFSYNC, [], [], [#include <fcntl.h>])
@@ -1939,6 +2000,7 @@ if test "$PORTNAME" = "win32"; then
   AC_LIBOBJ(win32common)
   AC_LIBOBJ(win32env)
   AC_LIBOBJ(win32error)
+  AC_LIBOBJ(win32ntdll)
   AC_LIBOBJ(win32security)
   AC_LIBOBJ(win32setlocale)
   AC_LIBOBJ(win32stat)
@@ -2161,11 +2223,15 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [
 # Check for ARMv8 CRC Extension intrinsics to do CRC calculations.
 #
 # First check if __crc32c* intrinsics can be used with the default compiler
-# flags. If not, check if adding -march=armv8-a+crc flag helps.
+# flags. If not, check if adding "-march=armv8-a+crc+simd" flag helps.
+# On systems using soft-float ABI, "-march=armv8-a+crc" is required instead.
 # CFLAGS_ARMV8_CRC32C is set if the extra flag is required.
 PGAC_ARMV8_CRC32C_INTRINSICS([])
 if test x"$pgac_armv8_crc32c_intrinsics" != x"yes"; then
-  PGAC_ARMV8_CRC32C_INTRINSICS([-march=armv8-a+crc])
+  PGAC_ARMV8_CRC32C_INTRINSICS([-march=armv8-a+crc+simd])
+  if test x"$pgac_armv8_crc32c_intrinsics" != x"yes"; then
+    PGAC_ARMV8_CRC32C_INTRINSICS([-march=armv8-a+crc])
+  fi
 fi
 AC_SUBST(CFLAGS_ARMV8_CRC32C)
 
@@ -2436,7 +2502,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["openHalo $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["羲和(Halo) $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons

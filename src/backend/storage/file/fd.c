@@ -834,10 +834,7 @@ durable_rename_excl(const char *oldfile, const char *newfile, int elevel)
 		ereport(elevel,
 				(errcode_for_file_access(),
 				 errmsg("could not link file \"%s\" to \"%s\": %m",
-						oldfile, newfile),
-				 (AmCheckpointerProcess() ?
-				  errhint("This is known to fail occasionally during archive recovery, where it is harmless.") :
-				  0)));
+						oldfile, newfile)));
 		return -1;
 	}
 	unlink(oldfile);
@@ -847,10 +844,7 @@ durable_rename_excl(const char *oldfile, const char *newfile, int elevel)
 		ereport(elevel,
 				(errcode_for_file_access(),
 				 errmsg("could not rename file \"%s\" to \"%s\": %m",
-						oldfile, newfile),
-				 (AmCheckpointerProcess() ?
-				  errhint("This is known to fail occasionally during archive recovery, where it is harmless.") :
-				  0)));
+						oldfile, newfile)));
 		return -1;
 	}
 #endif
@@ -3351,7 +3345,6 @@ SyncDataDirectory(void)
 	 */
 	xlog_is_symlink = false;
 
-#ifndef WIN32
 	{
 		struct stat st;
 
@@ -3363,10 +3356,6 @@ SyncDataDirectory(void)
 		else if (S_ISLNK(st.st_mode))
 			xlog_is_symlink = true;
 	}
-#else
-	if (pgwin32_is_junction("pg_wal"))
-		xlog_is_symlink = true;
-#endif
 
 #ifdef HAVE_SYNCFS
 	if (recovery_init_sync_method == RECOVERY_INIT_SYNC_METHOD_SYNCFS)

@@ -2075,10 +2075,7 @@ text_position(text *t1, text *t2, Oid collid)
     }
     else 
     {
-        if (halo_mysql_ci_collation)
-        {
-            lowered = lowerStrs(t1, t2, &backupBuf1, &backupBuf2);
-        }
+        /* do nothing; */
     }
 
 	text_position_setup(t1, t2, collid, &state);
@@ -2310,7 +2307,7 @@ text_position_next_internal(Oid collid, char *start_ptr, TextPositionState *stat
 		char		nchar = *needle;
 
 		hptr = start_ptr;
-        if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+        if (collid == caseInsensitiveId)
         {
             while (hptr < haystack_end)
             {
@@ -2341,7 +2338,7 @@ text_position_next_internal(Oid collid, char *start_ptr, TextPositionState *stat
 
         /* Start at startpos plus the length of the needle */
         hptr = start_ptr + needle_len - 1;
-        if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+        if (collid == caseInsensitiveId)
         {
             while (hptr < haystack_end)
             {

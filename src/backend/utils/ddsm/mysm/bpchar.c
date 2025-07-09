@@ -179,7 +179,7 @@ texteq_mys(PG_FUNCTION_ARGS)
         }
         else
         {
-            if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+            if (collid == caseInsensitiveId)
             {
                 result = (strncasecmp(str1, str2, len1) == 0);
             }
@@ -289,7 +289,7 @@ textne_mys(PG_FUNCTION_ARGS)
         }
         else
         {
-            if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+            if (collid == caseInsensitiveId)
             {
                 result = (strncasecmp(str1, str2, len1) != 0);
             }
@@ -378,14 +378,7 @@ bpcharlike(PG_FUNCTION_ARGS)
     }
     else 
     {
-        if (halo_mysql_ci_collation)
-        {
-            result = (Generic_Text_IC_like(str, pat, collid) == LIKE_TRUE);
-        }
-        else 
-        {
-            result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) == LIKE_TRUE);
-        }
+        result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) == LIKE_TRUE);
     }
 
     if (i < (str_orig_len - 1))
@@ -431,14 +424,7 @@ bpcharnlike(PG_FUNCTION_ARGS)
     }
     else 
     {
-        if (halo_mysql_ci_collation)
-        {
-            result = (Generic_Text_IC_like(str, pat, collid) != LIKE_TRUE);
-        }
-        else 
-        {
-            result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) != LIKE_TRUE);
-        }
+        result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) != LIKE_TRUE);
     }
 
     if (i < (str_orig_len - 1))

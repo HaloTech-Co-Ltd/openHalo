@@ -4995,8 +4995,9 @@ ANY <replaceable class="parameter">num_sync</replaceable> ( <replaceable class="
       </term>
       <listitem>
        <para>
-        Enables or disables the query planner's use of index-scan plan
-        types. The default is <literal>on</literal>.
+        Enables or disables the query planner's use of index-scan and
+        index-only-scan plan types.  The default is <literal>on</literal>.
+        Also see <xref linkend="guc-enable-indexonlyscan"/>.
        </para>
       </listitem>
      </varlistentry>
@@ -5011,7 +5012,9 @@ ANY <replaceable class="parameter">num_sync</replaceable> ( <replaceable class="
        <para>
         Enables or disables the query planner's use of index-only-scan plan
         types (see <xref linkend="indexes-index-only-scans"/>).
-        The default is <literal>on</literal>.
+        The default is <literal>on</literal>.  The
+        <xref linkend="guc-enable-indexscan"/> setting must also be
+        enabled to have the query planner consider index-only-scans.
        </para>
       </listitem>
      </varlistentry>
@@ -7478,7 +7481,7 @@ COPY postgres_log FROM '/full/path/to/logfile.csv' WITH csv;
         various purposes.  The cluster name appears in the process title for
         all server processes in this cluster.  Moreover, it is the default
         application name for a standby connection (see <xref
-        linkend="guc-synchronous-standby-names"/>.)
+        linkend="guc-synchronous-standby-names"/>).
        </para>
 
        <para>

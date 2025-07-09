@@ -328,9 +328,17 @@ ReorderBufferAllocate(void)
 											SLAB_DEFAULT_BLOCK_SIZE,
 											sizeof(ReorderBufferTXN));
 
+	/*
+	 * To minimize memory fragmentation caused by long-running transactions
+	 * with changes spanning multiple memory blocks, we use a single
+	 * fixed-size memory block for decoded tuple storage. The performance
+	 * testing showed that the default memory block size maintains logical
+	 * decoding performance without causing fragmentation due to concurrent
+	 * transactions.
+	 */
 	buffer->tup_context = GenerationContextCreate(new_ctx,
 												  "Tuples",
-												  SLAB_LARGE_BLOCK_SIZE);
+												  SLAB_DEFAULT_BLOCK_SIZE);
 
 	hash_ctl.keysize = sizeof(TransactionId);
 	hash_ctl.entrysize = sizeof(ReorderBufferTXNByIdEnt);
@@ -5187,4 +5195,27 @@ restart:
 	if (cmax)
 		*cmax = ent->cmax;
 	return true;
+}
+
+/*
+ * Count invalidation messages of specified transaction.
+ *
+ * Returns number of messages, and msgs is set to the pointer of the linked
+ * list for the messages.
+ */
+uint32
+ReorderBufferGetInvalidations(ReorderBuffer *rb, TransactionId xid,
+							  SharedInvalidationMessage **msgs)
+{
+	ReorderBufferTXN *txn;
+
+	txn = ReorderBufferTXNByXid(rb, xid, false, NULL, InvalidXLogRecPtr,
+								false);
+
+	if (txn == NULL)
+		return 0;
+
+	*msgs = txn->invalidations;
+
+	return txn->ninvalidations;
 }

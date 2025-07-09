@@ -344,13 +344,13 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 	 * These checks are not enforced when in standalone mode, so that there is
 	 * a way to recover from disabling all access to all databases, for
 	 * example "UPDATE pg_database SET datallowconn = false;".
-	 *
-	 * We do not enforce them for autovacuum worker processes either.
 	 */
-	if (IsUnderPostmaster && !IsAutoVacuumWorkerProcess())
+	if (IsUnderPostmaster)
 	{
 		/*
 		 * Check that the database is currently allowing connections.
+		 * (Background processes can override this test and the next one by
+		 * setting override_allow_connections.)
 		 */
 		if (!dbform->datallowconn && !override_allow_connections)
 			ereport(FATAL,
@@ -363,7 +363,7 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 		 * is redundant, but since we have the flag, might as well check it
 		 * and save a few cycles.)
 		 */
-		if (!am_superuser &&
+		if (!am_superuser && !override_allow_connections &&
 			pg_database_aclcheck(MyDatabaseId, GetUserId(),
 								 ACL_CONNECT) != ACLCHECK_OK)
 			ereport(FATAL,
@@ -372,7 +372,9 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 					 errdetail("User does not have CONNECT privilege.")));
 
 		/*
-		 * Check connection limit for this database.
+		 * Check connection limit for this database.  We enforce the limit
+		 * only for regular backends, since other process types have their own
+		 * PGPROC pools.
 		 *
 		 * There is a race condition here --- we create our PGPROC before
 		 * checking for other PGPROCs.  If two backends did this at about the
@@ -382,6 +384,7 @@ CheckMyDatabase(const char *name, bool am_superuser, bool override_allow_connect
 		 * just document that the connection limit is approximate.
 		 */
 		if (dbform->datconnlimit >= 0 &&
+			AmRegularBackendProcess() &&
 			!am_superuser &&
 			CountDBConnections(MyDatabaseId) > dbform->datconnlimit)
 			ereport(FATAL,
@@ -841,11 +844,11 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	}
 
 	/*
-	 * The last few connection slots are reserved for superusers.  Replication
-	 * connections are drawn from slots reserved with max_wal_senders and not
-	 * limited by max_connections or superuser_reserved_connections.
+	 * The last few regular connection slots are reserved for superusers. We
+	 * do not apply this limit to background processes, since they all have
+	 * their own pools of PGPROC slots.
 	 */
-	if (!am_superuser && !am_walsender &&
+	if (AmRegularBackendProcess() && !am_superuser &&
 		ReservedBackends > 0 &&
 		!HaveNFreeProcs(ReservedBackends))
 		ereport(FATAL,

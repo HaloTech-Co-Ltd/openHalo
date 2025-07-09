@@ -311,14 +311,7 @@ textlike(PG_FUNCTION_ARGS)
         }
         else 
         {
-            if (halo_mysql_ci_collation)
-            {
-                result = (Generic_Text_IC_like(str, pat, PG_GET_COLLATION()) == LIKE_TRUE);
-            }
-            else 
-            {
-                result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) == LIKE_TRUE);
-            }
+            result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) == LIKE_TRUE);
         }
 
         PG_RETURN_BOOL(result);
@@ -374,14 +367,7 @@ textnlike(PG_FUNCTION_ARGS)
         }
         else 
         {
-            if (halo_mysql_ci_collation)
-            {
-                result = (Generic_Text_IC_like(str, pat, PG_GET_COLLATION()) != LIKE_TRUE);
-            }
-            else 
-            {
-                result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) != LIKE_TRUE);
-            }
+            result = (GenericMatchText(s, slen, p, plen, PG_GET_COLLATION()) != LIKE_TRUE);
         }
 
         PG_RETURN_BOOL(result);
