@@ -198,7 +198,13 @@ static void transformColumnType(CreateStmtContext *cxt, ColumnDef *column);
 static void transformPartitionCmd(CreateStmtContext *cxt, PartitionCmd *cmd);
 static List *MysProcessTableOption(CreateStmtContext *cxt, List *options);
 static void MysProcessOnUpdateNow(CreateStmtContext *cxt, ColumnDef *colDef);
-static void rectifyCollate(CreateStmt *stmt);
+static bool isStrTypeColumn(ColumnDef *columnDef);
+static bool isTableCollationCaseInsensitive(List *tabOptions);
+static void setColumnCollateToCaseInsensitive(ColumnDef *columnDef);
+static void rectifySpecifiedColumnCollate(ColumnDef *columnDef);
+static void rectifyColumnCollate(List *tabOptions, ColumnDef *columnDef);
+static void rectifyColumnsCollate(CreateStmt *stmt);
+static void rectifyColumnCollateForAlter(ColumnDef *columnDef);
 
 
 List *
@@ -1220,7 +1226,7 @@ mys_transformCreateStmt(CreateStmt *stmt, const char *queryString)
 	Oid			existing_relid;
 	ParseCallbackState pcbstate;
 
-    rectifyCollate(stmt);
+    rectifyColumnsCollate(stmt);
 
 	/* Set up pstate */
 	pstate = make_parsestate(NULL);
@@ -1411,20 +1417,46 @@ mys_transformCreateStmt(CreateStmt *stmt, const char *queryString)
 	return result;
 }
 
-static void 
-rectifyCollate(CreateStmt *stmt)
+static bool
+isStrTypeColumn(ColumnDef *columnDef)
 {
-    int tableCollationVal;
-    if (stmt->options == NIL)
+    char *typeName;
+    if (list_length(columnDef->typeName->names) == 1)
     {
-        tableCollationVal = 0;
+        typeName = strVal(linitial(columnDef->typeName->names));
     }
-    else 
+    else if (list_length(columnDef->typeName->names) == 2)
+    {
+        typeName = strVal(lsecond(columnDef->typeName->names));
+    }
+    else
+    {
+        return false;
+    }
+
+    if ((strncasecmp(typeName, "char", 4) == 0) ||
+        (strncasecmp(typeName, "bpchar", 6) == 0) ||
+        (strncasecmp(typeName, "varchar", 7) == 0) ||
+        (strncasecmp(typeName, "tinytext", 8) == 0) ||
+        (strncasecmp(typeName, "mediumtext", 10) == 0) ||
+        (strncasecmp(typeName, "text", 4) == 0) ||
+        (strncasecmp(typeName, "longtext", 8) == 0))
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
+static bool
+isTableCollationCaseInsensitive(List *tabOptions)
+{
+    if (tabOptions != NIL)
     {
         ListCell *lc;
-
-        tableCollationVal = 0;
-        foreach (lc, stmt->options)
+        foreach (lc, tabOptions)
         {
             DefElem *de = (DefElem *) lfirst(lc);
             if (strncasecmp(de->defname, "collate", 7) == 0)
@@ -1432,179 +1464,300 @@ rectifyCollate(CreateStmt *stmt)
                 List *collateNames = (List *)de->arg;
                 char *collateName = strVal(linitial(collateNames));
                 int collateNameLen = strlen(collateName);
-                if (strncasecmp((collateName + (collateNameLen - 3)), "_ci", 3) == 0)
+                if ((3 < collateNameLen) &&
+                    (strncasecmp((collateName + (collateNameLen - 3)), "_ci", 3) == 0))
                 {
-                    tableCollationVal = 1;
+                    return true;
                 }
-                else 
+                else
                 {
-                    tableCollationVal = 2;
-                }
-                break;
-            }
-        }
-    }
-    if (tableCollationVal == 0)
-    {
-        ListCell *lc;
-        foreach (lc, stmt->tableElts)
-        {
-            Node *node = lfirst(lc);
-            if (IsA(node, ColumnDef))
-            {
-                ColumnDef *cd = castNode(ColumnDef, node);
-                char *typeName;
-                if (list_length(cd->typeName->names) == 1)
-                {
-                    typeName = strVal(linitial(cd->typeName->names));
-                }
-                else if (list_length(cd->typeName->names) == 2)
-                {
-                    typeName = strVal(lsecond(cd->typeName->names));
-                }
-                else 
-                {
-                    break;
-                }
-                if ((strncasecmp(typeName, "char", 4) == 0) || 
-                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
-                    (strncasecmp(typeName, "varchar", 7) == 0) || 
-                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
-                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
-                    (strncasecmp(typeName, "text", 4) == 0) || 
-                    (strncasecmp(typeName, "longtext", 8) == 0))
-                {
-                    if (cd->collClause == NULL)
-                    {
-                        CollateClause *collateClause;
-                        collateClause = makeNode(CollateClause);
-                        collateClause->arg = NULL;
-                        collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
-                        collateClause->location = -1;
-                        cd->collClause = collateClause;
-                    }
-                    else
-                    {
-                        char *collateName = strVal(linitial(cd->collClause->collname));
-                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
-                        {
-                            /* do nothing; */
-                        }
-                        else
-                        {
-                            cd->collClause = NULL;
-                        }
-                    }
+                    return false;
                 }
             }
         }
+        return true;
     }
-    else if (tableCollationVal == 1)
+    else
     {
-        ListCell *lc;
-        foreach (lc, stmt->tableElts)
+        return true;
+    }
+}
+
+static void
+setColumnCollateToCaseInsensitive(ColumnDef *columnDef)
+{
+    CollateClause *collateClause;
+    collateClause = makeNode(CollateClause);
+    collateClause->arg = NULL;
+    collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
+    collateClause->location = -1;
+    columnDef->collClause = collateClause;
+}
+
+static void
+rectifySpecifiedColumnCollate(ColumnDef *columnDef)
+{
+    char *collateName = strVal(linitial(columnDef->collClause->collname));
+    int collateNameLen = strlen(collateName);
+    if ((3 < collateNameLen) &&
+        (strncasecmp((collateName + (collateNameLen - 3)), "_ci", 3) == 0))
+    {
+        setColumnCollateToCaseInsensitive(columnDef);
+    }
+    else
+    {
+        columnDef->collClause = NULL;
+    }
+}
+
+static void
+rectifyColumnCollate(List *tabOptions, ColumnDef *columnDef)
+{
+    if (isStrTypeColumn(columnDef))
+    {
+        if (columnDef->collClause == NULL)
         {
-            Node *node = lfirst(lc);
-            if (IsA(node, ColumnDef))
+            if (isTableCollationCaseInsensitive(tabOptions))
             {
-                ColumnDef *cd = castNode(ColumnDef, node);
-                char *typeName;
-                if (list_length(cd->typeName->names) == 1)
-                {
-                    typeName = strVal(linitial(cd->typeName->names));
-                }
-                else if (list_length(cd->typeName->names) == 2)
-                {
-                    typeName = strVal(lsecond(cd->typeName->names));
-                }
-                else 
-                {
-                    break;
-                }
-                if ((strncasecmp(typeName, "char", 4) == 0) || 
-                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
-                    (strncasecmp(typeName, "varchar", 7) == 0) || 
-                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
-                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
-                    (strncasecmp(typeName, "text", 4) == 0) || 
-                    (strncasecmp(typeName, "longtext", 8) == 0))
-                {
-                    if (cd->collClause == NULL)
-                    {
-                        CollateClause *collateClause;
-                        collateClause = makeNode(CollateClause);
-                        collateClause->arg = NULL;
-                        collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
-                        collateClause->location = -1;
-                        cd->collClause = collateClause;
-                    }
-                    else
-                    {
-                        char *collateName = strVal(linitial(cd->collClause->collname));
-                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
-                        {
-                            /* do nothing; */
-                        }
-                        else
-                        {
-                            cd->collClause = NULL;
-                        }
-                    }
-                }
+                setColumnCollateToCaseInsensitive(columnDef);
+            }
+            else
+            {
+                /* do nothing; */
             }
         }
-    }
-    else 
-    {
-        ListCell *lc;
-        foreach (lc, stmt->tableElts)
+        else
         {
-            Node *node = lfirst(lc);
-            if (IsA(node, ColumnDef))
-            {
-                ColumnDef *cd = castNode(ColumnDef, node);
-                char *typeName;
-                if (list_length(cd->typeName->names) == 1)
-                {
-                    typeName = strVal(linitial(cd->typeName->names));
-                }
-                else if (list_length(cd->typeName->names) == 2)
-                {
-                    typeName = strVal(lsecond(cd->typeName->names));
-                }
-                else 
-                {
-                    break;
-                }
-                if ((strncasecmp(typeName, "char", 4) == 0) || 
-                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
-                    (strncasecmp(typeName, "varchar", 7) == 0) || 
-                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
-                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
-                    (strncasecmp(typeName, "text", 4) == 0) || 
-                    (strncasecmp(typeName, "longtext", 8) == 0))
-                {
-                    if (cd->collClause == NULL)
-                    {
-                        /* do nothing; */
-                    }
-                    else
-                    {
-                        char *collateName = strVal(linitial(cd->collClause->collname));
-                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
-                        {
-                            /* do nothing; */
-                        }
-                        else
-                        {
-                            cd->collClause = NULL;
-                        }
-                    }
-                }
-            }
+            rectifySpecifiedColumnCollate(columnDef);
         }
     }
 }
+
+static void
+rectifyColumnsCollate(CreateStmt *stmt)
+{
+    ListCell *lc;
+    foreach (lc, stmt->tableElts)
+    {
+        Node *node = lfirst(lc);
+        if (IsA(node, ColumnDef))
+        {
+            ColumnDef *cd = castNode(ColumnDef, node);
+            rectifyColumnCollate(stmt->options, cd);
+        }
+    }
+}
+
+static void
+rectifyColumnCollateForAlter(ColumnDef *columnDef)
+{
+    if (isStrTypeColumn(columnDef))
+    {
+        if (columnDef->collClause == NULL)
+        {
+            setColumnCollateToCaseInsensitive(columnDef);
+        }
+        else
+        {
+            rectifySpecifiedColumnCollate(columnDef);
+        }
+    }
+}
+
+//static void 
+//rectifyCollate(CreateStmt *stmt)
+//{
+//    int tableCollationVal;
+//    if (stmt->options == NIL)
+//    {
+//        tableCollationVal = 0;
+//    }
+//    else 
+//    {
+//        ListCell *lc;
+//
+//        tableCollationVal = 0;
+//        foreach (lc, stmt->options)
+//        {
+//            DefElem *de = (DefElem *) lfirst(lc);
+//            if (strncasecmp(de->defname, "collate", 7) == 0)
+//            {
+//                List *collateNames = (List *)de->arg;
+//                char *collateName = strVal(linitial(collateNames));
+//                int collateNameLen = strlen(collateName);
+//                if (strncasecmp((collateName + (collateNameLen - 3)), "_ci", 3) == 0)
+//                {
+//                    tableCollationVal = 1;
+//                }
+//                else 
+//                {
+//                    tableCollationVal = 2;
+//                }
+//                break;
+//            }
+//        }
+//    }
+//    if (tableCollationVal == 0)
+//    {
+//        ListCell *lc;
+//        foreach (lc, stmt->tableElts)
+//        {
+//            Node *node = lfirst(lc);
+//            if (IsA(node, ColumnDef))
+//            {
+//                ColumnDef *cd = castNode(ColumnDef, node);
+//                char *typeName;
+//                if (list_length(cd->typeName->names) == 1)
+//                {
+//                    typeName = strVal(linitial(cd->typeName->names));
+//                }
+//                else if (list_length(cd->typeName->names) == 2)
+//                {
+//                    typeName = strVal(lsecond(cd->typeName->names));
+//                }
+//                else 
+//                {
+//                    break;
+//                }
+//                if ((strncasecmp(typeName, "char", 4) == 0) || 
+//                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
+//                    (strncasecmp(typeName, "varchar", 7) == 0) || 
+//                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
+//                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
+//                    (strncasecmp(typeName, "text", 4) == 0) || 
+//                    (strncasecmp(typeName, "longtext", 8) == 0))
+//                {
+//                    if (cd->collClause == NULL)
+//                    {
+//                        CollateClause *collateClause;
+//                        collateClause = makeNode(CollateClause);
+//                        collateClause->arg = NULL;
+//                        collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
+//                        collateClause->location = -1;
+//                        cd->collClause = collateClause;
+//                    }
+//                    else
+//                    {
+//                        char *collateName = strVal(linitial(cd->collClause->collname));
+//                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
+//                        {
+//                            /* do nothing; */
+//                        }
+//                        else
+//                        {
+//                            cd->collClause = NULL;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//    else if (tableCollationVal == 1)
+//    {
+//        ListCell *lc;
+//        foreach (lc, stmt->tableElts)
+//        {
+//            Node *node = lfirst(lc);
+//            if (IsA(node, ColumnDef))
+//            {
+//                ColumnDef *cd = castNode(ColumnDef, node);
+//                char *typeName;
+//                if (list_length(cd->typeName->names) == 1)
+//                {
+//                    typeName = strVal(linitial(cd->typeName->names));
+//                }
+//                else if (list_length(cd->typeName->names) == 2)
+//                {
+//                    typeName = strVal(lsecond(cd->typeName->names));
+//                }
+//                else 
+//                {
+//                    break;
+//                }
+//                if ((strncasecmp(typeName, "char", 4) == 0) || 
+//                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
+//                    (strncasecmp(typeName, "varchar", 7) == 0) || 
+//                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
+//                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
+//                    (strncasecmp(typeName, "text", 4) == 0) || 
+//                    (strncasecmp(typeName, "longtext", 8) == 0))
+//                {
+//                    if (cd->collClause == NULL)
+//                    {
+//                        CollateClause *collateClause;
+//                        collateClause = makeNode(CollateClause);
+//                        collateClause->arg = NULL;
+//                        collateClause->collname = list_make1(makeString(pstrdup("case_insensitive")));
+//                        collateClause->location = -1;
+//                        cd->collClause = collateClause;
+//                    }
+//                    else
+//                    {
+//                        char *collateName = strVal(linitial(cd->collClause->collname));
+//                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
+//                        {
+//                            /* do nothing; */
+//                        }
+//                        else
+//                        {
+//                            cd->collClause = NULL;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//    else 
+//    {
+//        ListCell *lc;
+//        foreach (lc, stmt->tableElts)
+//        {
+//            Node *node = lfirst(lc);
+//            if (IsA(node, ColumnDef))
+//            {
+//                ColumnDef *cd = castNode(ColumnDef, node);
+//                char *typeName;
+//                if (list_length(cd->typeName->names) == 1)
+//                {
+//                    typeName = strVal(linitial(cd->typeName->names));
+//                }
+//                else if (list_length(cd->typeName->names) == 2)
+//                {
+//                    typeName = strVal(lsecond(cd->typeName->names));
+//                }
+//                else 
+//                {
+//                    break;
+//                }
+//                if ((strncasecmp(typeName, "char", 4) == 0) || 
+//                    (strncasecmp(typeName, "bpchar", 6) == 0) || 
+//                    (strncasecmp(typeName, "varchar", 7) == 0) || 
+//                    (strncasecmp(typeName, "tinytext", 8) == 0) || 
+//                    (strncasecmp(typeName, "mediumtext", 10) == 0) || 
+//                    (strncasecmp(typeName, "text", 4) == 0) || 
+//                    (strncasecmp(typeName, "longtext", 8) == 0))
+//                {
+//                    if (cd->collClause == NULL)
+//                    {
+//                        /* do nothing; */
+//                    }
+//                    else
+//                    {
+//                        char *collateName = strVal(linitial(cd->collClause->collname));
+//                        if (strncasecmp(collateName, "case_insensitive", 16) == 0)
+//                        {
+//                            /* do nothing; */
+//                        }
+//                        else
+//                        {
+//                            cd->collClause = NULL;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 
 static void
 MysProcessAutoIncrement(CreateStmtContext *cxt)
@@ -4750,6 +4903,8 @@ transformModifyColumnDefinition(CreateStmtContext *cxt, char *oldColName, Column
 {
     bool sawOnUpdateNow;
     ExplicitColumnAttr *explicitColumnAttr = palloc0(sizeof(ExplicitColumnAttr));
+
+    rectifyColumnCollateForAlter(column);
 
     cxt->columns = lappend(cxt->columns, column);
     cxt->explicitColumnsAttr = lappend(cxt->explicitColumnsAttr, explicitColumnAttr);

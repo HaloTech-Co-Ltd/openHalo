@@ -140,7 +140,6 @@
 
 /* 配置参数 */
 char *halo_mysql_version = NULL;
-bool halo_mysql_ci_collation = true;
 int halo_mysql_column_name_case_control = 0;
 bool halo_mysql_explicit_defaults_for_timestamp = false;
 bool halo_mysql_auto_rollback_tx_on_error = false;
@@ -1040,6 +1039,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
              (qc->commandTag == CMDTAG_CREATE_CONSTRAINT) || 
              (qc->commandTag == CMDTAG_CREATE_TRIGGER) || 
              (qc->commandTag == CMDTAG_ALTER_DATABASE) || 
+             (qc->commandTag == CMDTAG_ALTER_ROLE) || 
              (qc->commandTag == CMDTAG_ALTER_SCHEMA) || 
              (qc->commandTag == CMDTAG_ALTER_TABLE) || 
              (qc->commandTag == CMDTAG_ALTER_SEQUENCE) || 
@@ -6530,7 +6530,7 @@ getCaseInsensitiveId(void)
                           ObjectIdGetDatum(namespaceId));
     if (!HeapTupleIsValid(tup))
     {
-        elog(ERROR, "could not get oid for caseInsensitiveId");
+        elog(ERROR, "could not get caseInsensitive(Maybe aux_mysql extension had not been installed)");
     }
 
 	form = (Form_pg_collation) GETSTRUCT(tup);

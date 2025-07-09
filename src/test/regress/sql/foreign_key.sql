@@ -943,8 +943,10 @@ COMMIT;
 
 -- try additional syntax
 ALTER TABLE fktable ALTER CONSTRAINT fktable_fk_fkey NOT DEFERRABLE;
--- illegal option
+-- illegal options
 ALTER TABLE fktable ALTER CONSTRAINT fktable_fk_fkey NOT DEFERRABLE INITIALLY DEFERRED;
+ALTER TABLE fktable ALTER CONSTRAINT fktable_fk_fkey NO INHERIT;
+ALTER TABLE fktable ALTER CONSTRAINT fktable_fk_fkey NOT VALID;
 
 -- test order of firing of FK triggers when several RI-induced changes need to
 -- be made to the same row.  This was broken by subtransaction-related
@@ -1366,6 +1368,23 @@ ALTER TABLE fk_partitioned_fk ATTACH PARTITION fk_partitioned_fk_2
 
 -- leave these tables around intentionally
 
+-- Verify that attaching a table that's referenced by an existing FK
+-- in the parent throws an error
+CREATE TABLE fk_partitioned_pk_6 (a int PRIMARY KEY);
+CREATE TABLE fk_partitioned_fk_6 (a int REFERENCES fk_partitioned_pk_6) PARTITION BY LIST (a);
+ALTER TABLE fk_partitioned_fk_6 ATTACH PARTITION fk_partitioned_pk_6 FOR VALUES IN (1);
+DROP TABLE fk_partitioned_pk_6, fk_partitioned_fk_6;
+
+-- This case is similar to above, but the referenced relation is one level
+-- lower in the hierarchy.  This one fails in a different way as the above,
+-- because we don't bother to protect against this case explicitly.  If the
+-- current error stops happening, we'll need to add a better protection.
+CREATE TABLE fk_partitioned_pk_6 (a int PRIMARY KEY) PARTITION BY list (a);
+CREATE TABLE fk_partitioned_pk_61 PARTITION OF fk_partitioned_pk_6 FOR VALUES IN (1);
+CREATE TABLE fk_partitioned_fk_6 (a int REFERENCES fk_partitioned_pk_61) PARTITION BY LIST (a);
+ALTER TABLE fk_partitioned_fk_6 ATTACH PARTITION fk_partitioned_pk_6 FOR VALUES IN (1);
+DROP TABLE fk_partitioned_pk_6, fk_partitioned_fk_6;
+
 -- test the case when the referenced table is owned by a different user
 create role regress_other_partitioned_fk_owner;
 grant references on fk_notpartitioned_pk to regress_other_partitioned_fk_owner;
@@ -1419,29 +1438,55 @@ CREATE TABLE part33_self_fk (
 );
 ALTER TABLE part3_self_fk ATTACH PARTITION part33_self_fk FOR VALUES FROM (30) TO (40);
 
-SELECT cr.relname, co.conname, co.contype, co.convalidated,
+-- verify that this constraint works
+INSERT INTO parted_self_fk VALUES (1, NULL), (2, NULL), (3, NULL);
+INSERT INTO parted_self_fk VALUES (10, 1), (11, 2), (12, 3) RETURNING tableoid::regclass;
+
+INSERT INTO parted_self_fk VALUES (4, 5);	-- error: referenced doesn't exist
+DELETE FROM parted_self_fk WHERE id = 1 RETURNING *;	-- error: reference remains
+
+SELECT cr.relname, co.conname, co.convalidated,
        p.conname AS conparent, p.convalidated, cf.relname AS foreignrel
 FROM pg_constraint co
 JOIN pg_class cr ON cr.oid = co.conrelid
 LEFT JOIN pg_class cf ON cf.oid = co.confrelid
 LEFT JOIN pg_constraint p ON p.oid = co.conparentid
-WHERE cr.oid IN (SELECT relid FROM pg_partition_tree('parted_self_fk'))
-ORDER BY co.contype, cr.relname, co.conname, p.conname;
+WHERE co.contype = 'f' AND
+      cr.oid IN (SELECT relid FROM pg_partition_tree('parted_self_fk'))
+ORDER BY cr.relname, co.conname, p.conname;
 
 -- detach and re-attach multiple times just to ensure everything is kosher
 ALTER TABLE parted_self_fk DETACH PARTITION part2_self_fk;
+
+\d+ part2_self_fk
+
+INSERT INTO part2_self_fk VALUES (16, 9);	-- good, but it'll prevent the attach below
 ALTER TABLE parted_self_fk ATTACH PARTITION part2_self_fk FOR VALUES FROM (10) TO (20);
+
+DELETE FROM part2_self_fk WHERE id = 16;
+ALTER TABLE parted_self_fk ATTACH PARTITION part2_self_fk FOR VALUES FROM (10) TO (20);
+
+INSERT INTO parted_self_fk VALUES (16, 9);	-- error: referenced doesn't exist
+DELETE FROM parted_self_fk WHERE id = 3 RETURNING *;	-- error: reference remains
+
 ALTER TABLE parted_self_fk DETACH PARTITION part2_self_fk;
 ALTER TABLE parted_self_fk ATTACH PARTITION part2_self_fk FOR VALUES FROM (10) TO (20);
 
-SELECT cr.relname, co.conname, co.contype, co.convalidated,
+ALTER TABLE parted_self_fk DETACH PARTITION part3_self_fk;
+ALTER TABLE parted_self_fk ATTACH PARTITION part3_self_fk FOR VALUES FROM (30) TO (40);
+
+ALTER TABLE part3_self_fk DETACH PARTITION part33_self_fk;
+ALTER TABLE part3_self_fk ATTACH PARTITION part33_self_fk FOR VALUES FROM (30) TO (40);
+
+SELECT cr.relname, co.conname, co.convalidated,
        p.conname AS conparent, p.convalidated, cf.relname AS foreignrel
 FROM pg_constraint co
 JOIN pg_class cr ON cr.oid = co.conrelid
 LEFT JOIN pg_class cf ON cf.oid = co.confrelid
 LEFT JOIN pg_constraint p ON p.oid = co.conparentid
-WHERE cr.oid IN (SELECT relid FROM pg_partition_tree('parted_self_fk'))
-ORDER BY co.contype, cr.relname, co.conname, p.conname;
+WHERE co.contype = 'f' AND
+      cr.oid IN (SELECT relid FROM pg_partition_tree('parted_self_fk'))
+ORDER BY cr.relname, co.conname, p.conname;
 
 -- Leave this table around, for pg_upgrade/pg_dump tests
 
@@ -1885,3 +1930,59 @@ UPDATE fkpart10.tbl1 SET f1 = 2 WHERE f1 = 1;
 INSERT INTO fkpart10.tbl1 VALUES (0), (1);
 COMMIT;
 DROP SCHEMA fkpart10 CASCADE;
+
+-- When a table is attached as partition to a partitioned table that has
+-- a foreign key to another partitioned table, it acquires a clone of the
+-- FK.  Upon detach, Postgres 14 and earlier remove the foreign key (newer
+-- versions make it a standalone constraint.)
+CREATE SCHEMA fkpart12
+  CREATE TABLE fk_p ( id int, jd int, PRIMARY KEY(id, jd)) PARTITION BY list (id)
+  CREATE TABLE fk_p_1 PARTITION OF fk_p FOR VALUES IN (1) PARTITION BY list (jd)
+  CREATE TABLE fk_p_1_1 PARTITION OF fk_p_1 FOR VALUES IN (1)
+  CREATE TABLE fk_p_1_2 PARTITION OF fk_p_1 FOR VALUES IN (2)
+  CREATE TABLE fk_p_2 PARTITION OF fk_p FOR VALUES IN (2) PARTITION BY list (jd)
+  CREATE TABLE fk_p_2_1 PARTITION OF fk_p_2 FOR VALUES IN (1)
+  CREATE TABLE fk_p_2_2 PARTITION OF fk_p_2 FOR VALUES IN (2)
+  CREATE TABLE fk_r_1 ( id int PRIMARY KEY, p_id int NOT NULL, p_jd int NOT NULL)
+  CREATE TABLE fk_r_2 ( id int PRIMARY KEY, p_id int NOT NULL, p_jd int NOT NULL) PARTITION BY list (id)
+  CREATE TABLE fk_r_2_1 PARTITION OF fk_r_2 FOR VALUES IN (2, 1)
+  CREATE TABLE fk_r   ( id int PRIMARY KEY, p_id int NOT NULL, p_jd int NOT NULL,
+       FOREIGN KEY (p_id, p_jd) REFERENCES fk_p (id, jd)
+  ) PARTITION BY list (id);
+SET search_path TO fkpart12;
+
+INSERT INTO fk_p VALUES (1, 1);
+
+ALTER TABLE fk_r ATTACH PARTITION fk_r_1 FOR VALUES IN (1);
+ALTER TABLE fk_r ATTACH PARTITION fk_r_2 FOR VALUES IN (2);
+
+\d fk_r_2
+
+INSERT INTO fk_r VALUES (1, 1, 1);
+INSERT INTO fk_r VALUES (2, 2, 1);	-- fails
+
+ALTER TABLE fk_r DETACH PARTITION fk_r_1;
+ALTER TABLE fk_r DETACH PARTITION fk_r_2;
+
+\d fk_r_2
+
+INSERT INTO fk_r_1 VALUES (2, 1, 2); -- works: there's no FK anymore
+DELETE FROM fk_p;	-- works
+
+ALTER TABLE fk_r ATTACH PARTITION fk_r_1 FOR VALUES IN (1);	-- fails
+
+INSERT INTO fk_r_2 VALUES (2, 2, 2);
+INSERT INTO fk_p VALUES (2, 2);
+ALTER TABLE fk_r ATTACH PARTITION fk_r_2 FOR VALUES IN (2);
+\d fk_r_2
+DELETE FROM fk_p;	-- fails
+
+-- these should all fail
+ALTER TABLE fk_r_1 DROP CONSTRAINT fk_r_p_id_p_jd_fkey;
+ALTER TABLE fk_r DROP CONSTRAINT fk_r_p_id_p_jd_fkey1;
+ALTER TABLE fk_r_2 DROP CONSTRAINT fk_r_p_id_p_jd_fkey;
+
+SET client_min_messages TO warning;
+DROP SCHEMA fkpart12 CASCADE;
+RESET client_min_messages;
+RESET search_path;

@@ -1190,10 +1190,7 @@ text_position(text *t1, text *t2, Oid collid)
         }
         else 
         {
-            if (halo_mysql_ci_collation)
-            {
-                lowered = lowerStrs(t1, t2, &backupBuf1, &backupBuf2);
-            }
+            /* do nothing; */
         }
     }
 
@@ -1724,7 +1721,7 @@ varstr_cmp(const char *arg1, int len1, const char *arg2, int len2, Oid collid)
         if ((MyProcPort != NULL) && 
             (nodeTag(MyProcPort->protocol_handler) == T_MySQLProtocol))
         {
-            if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+            if (collid == caseInsensitiveId)
             {
                 for (int i = 0; i < len1; i++)
                 {
@@ -1897,7 +1894,7 @@ texteq(PG_FUNCTION_ARGS)
             }
             else
             {
-                if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+                if (collid == caseInsensitiveId)
                 {
                     result = (strncasecmp(str1, str2, len1) == 0);
                 }
@@ -2062,7 +2059,7 @@ textne(PG_FUNCTION_ARGS)
             }
             else
             {
-                if ((collid == caseInsensitiveId) || halo_mysql_ci_collation)
+                if (collid == caseInsensitiveId)
                 {
                     result = (strncasecmp(str1, str2, len1) != 0);
                 }

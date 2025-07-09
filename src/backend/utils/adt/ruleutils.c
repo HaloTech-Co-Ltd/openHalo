@@ -6127,13 +6127,19 @@ get_setop_query(Node *setOp, Query *query, deparse_context *context,
 		Query	   *subquery = rte->subquery;
 
 		Assert(subquery != NULL);
-		Assert(subquery->setOperations == NULL);
-		/* Need parens if WITH, ORDER BY, FOR UPDATE, or LIMIT; see gram.y */
+
+		/*
+		 * We need parens if WITH, ORDER BY, FOR UPDATE, or LIMIT; see gram.y.
+		 * Also add parens if the leaf query contains its own set operations.
+		 * (That shouldn't happen unless one of the other clauses is also
+		 * present, see transformSetOperationTree; but let's be safe.)
+		 */
 		need_paren = (subquery->cteList ||
 					  subquery->sortClause ||
 					  subquery->rowMarks ||
 					  subquery->limitOffset ||
-					  subquery->limitCount);
+					  subquery->limitCount ||
+					  subquery->setOperations);
 		if (need_paren)
 			appendStringInfoChar(buf, '(');
 		get_query_def(subquery, buf, context->namespaces, resultDesc,
@@ -7686,17 +7692,31 @@ get_name_for_var_field(Var *var, int fieldno,
 					/*
 					 * We're deparsing a Plan tree so we don't have complete
 					 * RTE entries (in particular, rte->subquery is NULL). But
-					 * the only place we'd see a Var directly referencing a
-					 * SUBQUERY RTE is in a SubqueryScan plan node, and we can
-					 * look into the child plan's tlist instead.
+					 * the only place we'd normally see a Var directly
+					 * referencing a SUBQUERY RTE is in a SubqueryScan plan
+					 * node, and we can look into the child plan's tlist
+					 * instead.  An exception occurs if the subquery was
+					 * proven empty and optimized away: then we'd find such a
+					 * Var in a childless Result node, and there's nothing in
+					 * the plan tree that would let us figure out what it had
+					 * originally referenced.  In that case, fall back on
+					 * printing "fN", analogously to the default column names
+					 * for RowExprs.
 					 */
 					TargetEntry *tle;
 					deparse_namespace save_dpns;
 					const char *result;
 
 					if (!dpns->inner_plan)
-						elog(ERROR, "failed to find plan for subquery %s",
-							 rte->eref->aliasname);
+					{
+						char	   *dummy_name = palloc(32);
+
+						Assert(dpns->plan && IsA(dpns->plan, Result));
+						snprintf(dummy_name, 32, "f%d", fieldno);
+						return dummy_name;
+					}
+					Assert(dpns->plan && IsA(dpns->plan, SubqueryScan));
+					
 					tle = get_tle_by_resno(dpns->inner_tlist, attnum);
 					if (!tle)
 						elog(ERROR, "bogus varattno for subquery var: %d",
@@ -7805,20 +7825,30 @@ get_name_for_var_field(Var *var, int fieldno,
 				{
 					/*
 					 * We're deparsing a Plan tree so we don't have a CTE
-					 * list.  But the only places we'd see a Var directly
-					 * referencing a CTE RTE are in CteScan or WorkTableScan
-					 * plan nodes.  For those cases, set_deparse_plan arranged
-					 * for dpns->inner_plan to be the plan node that emits the
-					 * CTE or RecursiveUnion result, and we can look at its
-					 * tlist instead.
+					 * list.  But the only places we'd normally see a Var
+					 * directly referencing a CTE RTE are in CteScan or
+					 * WorkTableScan plan nodes.  For those cases,
+					 * set_deparse_plan arranged for dpns->inner_plan to be
+					 * the plan node that emits the CTE or RecursiveUnion
+					 * result, and we can look at its tlist instead.  As
+					 * above, this can fail if the CTE has been proven empty,
+					 * in which case fall back to "fN".
 					 */
 					TargetEntry *tle;
 					deparse_namespace save_dpns;
 					const char *result;
 
 					if (!dpns->inner_plan)
-						elog(ERROR, "failed to find plan for CTE %s",
-							 rte->eref->aliasname);
+					{
+						char	   *dummy_name = palloc(32);
+
+						Assert(dpns->plan && IsA(dpns->plan, Result));
+						snprintf(dummy_name, 32, "f%d", fieldno);
+						return dummy_name;
+					}
+					Assert(dpns->plan && (IsA(dpns->plan, CteScan) ||
+										  IsA(dpns->plan, WorkTableScan)));
+
 					tle = get_tle_by_resno(dpns->inner_tlist, attnum);
 					if (!tle)
 						elog(ERROR, "bogus varattno for subquery var: %d",
@@ -10711,7 +10741,8 @@ get_tablefunc(TableFunc *tf, deparse_context *context, bool showimplicit)
 			if (ns_node != NULL)
 			{
 				get_rule_expr(expr, context, showimplicit);
-				appendStringInfo(buf, " AS %s", strVal(ns_node));
+				appendStringInfo(buf, " AS %s",
+								 quote_identifier(strVal(ns_node)));
 			}
 			else
 			{

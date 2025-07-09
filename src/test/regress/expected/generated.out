@@ -685,6 +685,11 @@ CREATE TABLE gtest24 (a int PRIMARY KEY, b gtestdomain1 GENERATED ALWAYS AS (a *
 INSERT INTO gtest24 (a) VALUES (4);  -- ok
 INSERT INTO gtest24 (a) VALUES (6);  -- error
 ERROR:  value for domain gtestdomain1 violates check constraint "gtestdomain1_check"
+CREATE DOMAIN gtestdomainnn AS int CHECK (VALUE IS NOT NULL);
+CREATE TABLE gtest24nn (a int, b gtestdomainnn GENERATED ALWAYS AS (a * 2) STORED);
+INSERT INTO gtest24nn (a) VALUES (4);  -- ok
+INSERT INTO gtest24nn (a) VALUES (NULL);  -- error
+ERROR:  value for domain gtestdomainnn violates check constraint "gtestdomainnn_check"
 -- typed tables (currently not supported)
 CREATE TYPE gtest_type AS (f1 integer, f2 text, f3 bigint);
 CREATE TABLE gtest28 OF gtest_type (f1 WITH OPTIONS GENERATED ALWAYS AS (f2 *2) STORED);
@@ -807,7 +812,8 @@ SELECT * FROM gtest27;
 (2 rows)
 
 ALTER TABLE gtest27 ALTER COLUMN x TYPE boolean USING x <> 0;  -- error
-ERROR:  generation expression for column "x" cannot be cast automatically to type boolean
+ERROR:  cannot specify USING when altering type of generated column
+DETAIL:  Column "x" is a generated column.
 ALTER TABLE gtest27 ALTER COLUMN x DROP DEFAULT;  -- error
 ERROR:  column "x" of relation "gtest27" is a generated column
 HINT:  Use ALTER TABLE ... ALTER COLUMN ... DROP EXPRESSION instead.

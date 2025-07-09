@@ -877,45 +877,10 @@ pg_rewrite_query(Query *query)
 	}
 #endif
 
-#ifdef WRITE_READ_PARSE_PLAN_TREES
-	/* Optional debugging check: pass querytree through outfuncs/readfuncs */
-	{
-		List	   *new_list = NIL;
-		ListCell   *lc;
-
-		/*
-		 * We currently lack outfuncs/readfuncs support for most utility
-		 * statement types, so only attempt to write/read non-utility queries.
-		 */
-		foreach(lc, querytree_list)
-		{
-			Query	   *query = castNode(Query, lfirst(lc));
-
-			if (query->commandType != CMD_UTILITY)
-			{
-				char	   *str = nodeToString(query);
-				Query	   *new_query = stringToNodeWithLocations(str);
-
-				/*
-				 * queryId is not saved in stored rules, but we must preserve
-				 * it here to avoid breaking pg_stat_statements.
-				 */
-				new_query->queryId = query->queryId;
-
-				new_list = lappend(new_list, new_query);
-				pfree(str);
-			}
-			else
-				new_list = lappend(new_list, query);
-		}
-
-		/* This checks both outfuncs/readfuncs and the equal() routines... */
-		if (!equal(new_list, querytree_list))
-			elog(WARNING, "outfuncs/readfuncs failed to produce equal parse tree");
-		else
-			querytree_list = new_list;
-	}
-#endif
+	/*
+	 * We don't apply WRITE_READ_PARSE_PLAN_TREES to rewritten query trees,
+	 * because it breaks the hack of preserving relid for rewritten views.
+	 */
 
 	if (Debug_print_rewritten)
 		elog_node_display(LOG, "rewritten parse tree", querytree_list,
@@ -1341,7 +1306,7 @@ standard_exec_simple_query(const char *query_string)
 		(void) PortalRun(portal,
 						 FETCH_ALL,
 						 true,	/* always top level */
-						 true,
+						 true,	/* ignored */
 						 receiver,
 						 receiver,
 						 &qc);
@@ -1745,6 +1710,7 @@ standard_exec_bind_message(StringInfo input_message)
 	char		msec_str[32];
 	ParamsErrorCbData params_data;
 	ErrorContextCallback params_errcxt;
+	ListCell   *lc;
 
 	/* Get the fixed part of the message */
 	portal_name = pq_getmsgstring(input_message);
@@ -1779,6 +1745,17 @@ standard_exec_bind_message(StringInfo input_message)
 	debug_query_string = psrc->query_string;
 
 	pgstat_report_activity(STATE_RUNNING, psrc->query_string);
+	
+	foreach(lc, psrc->query_list)
+	{
+		Query	   *query = lfirst_node(Query, lc);
+
+		if (query->queryId != UINT64CONST(0))
+		{
+			pgstat_report_query_id(query->queryId, false);
+			break;
+		}
+	}
 
 	set_ps_display("BIND");
 
@@ -2203,6 +2180,7 @@ exec_execute_message(const char *portal_name, long max_rows)
 	char		msec_str[32];
 	ParamsErrorCbData params_data;
 	ErrorContextCallback params_errcxt;
+	ListCell   *lc;
 
 	/* Adjust destination to tell printtup.c what to do */
 	dest = whereToSendOutput;
@@ -2248,6 +2226,17 @@ exec_execute_message(const char *portal_name, long max_rows)
 	debug_query_string = sourceText;
 
 	pgstat_report_activity(STATE_RUNNING, sourceText);
+	
+	foreach(lc, portal->stmts)
+	{
+		PlannedStmt *stmt = lfirst_node(PlannedStmt, lc);
+
+		if (stmt->queryId != UINT64CONST(0))
+		{
+			pgstat_report_query_id(stmt->queryId, false);
+			break;
+		}
+	}
 
 	set_ps_display(GetCommandTagName(portal->commandTag));
 
@@ -2327,7 +2316,7 @@ exec_execute_message(const char *portal_name, long max_rows)
 	completed = PortalRun(portal,
 						  max_rows,
 						  true, /* always top level */
-						  !execute_is_fetch && max_rows == FETCH_ALL,
+						  true, /* ignored */
 						  receiver,
 						  receiver,
 						  &qc);
@@ -3761,6 +3750,11 @@ check_restrict_nonsystem_relation_kind(char **newval, void **extra, GucSource so
 
 	/* Save the flags in *extra, for use by the assign function */
 	*extra = malloc(sizeof(int));
+	if (*extra == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("out of memory")));
+	
 	*((int *) *extra) = flags;
 
 	return true;

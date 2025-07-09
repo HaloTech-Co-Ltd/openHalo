@@ -217,15 +217,12 @@ mys_ExecutorRun(QueryDesc *queryDesc,
 			elog(ERROR, "can't re-execute query flagged for single execution");
 		queryDesc->already_executed = true;
 
-		ExecutePlan(estate,
-					queryDesc->planstate,
-					queryDesc->plannedstmt->parallelModeNeeded,
+		ExecutePlan(queryDesc,
 					operation,
 					sendTuples,
 					count,
 					direction,
-					dest,
-					execute_once);
+					dest);
 	}
 
 	/*
