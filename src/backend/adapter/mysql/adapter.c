@@ -4058,8 +4058,6 @@ closeSocket(int code, Datum arg)
 static void 
 simulateShowWarnErrReturn(void)
 {
-    char payloadBuf[1024];
-
     char packet_bytes01[] = {
         0x03
     };
@@ -4090,35 +4088,17 @@ simulateShowWarnErrReturn(void)
 
     if (0 < warnErrCode)
     {
-        int len;
-        int warnErrLevelLen;
-        int warnErrCodeLen;
-        int warnErrMsgLen;
         char warnErrCodeBuf[16];
-        int lenencIntLen;
+        char *payloadBuf = NULL;
+        int payloadLen = 0;
 
-        len = 0;
-        warnErrLevelLen = strlen(warnErrLevel);
-        len += calcLenencIntLen(warnErrLevelLen);
-        len += warnErrLevelLen;
         snprintf(warnErrCodeBuf, sizeof(warnErrCodeBuf), "%d", warnErrCode);
-        warnErrCodeLen = strlen(warnErrCodeBuf);
-        len += calcLenencIntLen(warnErrCodeLen);
-        len += warnErrCodeLen;
-        warnErrMsgLen = strlen(warnErrMsg);
-        len += calcLenencIntLen(warnErrMsgLen);
-        len += warnErrMsgLen;
-
-        netTransceiver->writePacketHeaderNoFlush(len);
-        lenencIntLen = assembleLenencUnsignedLong(warnErrLevelLen, payloadBuf);
-        netTransceiver->writePacketHeaderPayloadNoFlush(payloadBuf, lenencIntLen);
-        netTransceiver->writePacketHeaderPayloadNoFlush(warnErrLevel, warnErrLevelLen);
-        lenencIntLen = assembleLenencUnsignedLong(warnErrCodeLen, payloadBuf);
-        netTransceiver->writePacketHeaderPayloadNoFlush(payloadBuf, lenencIntLen);
-        netTransceiver->writePacketHeaderPayloadNoFlush(warnErrCodeBuf, warnErrCodeLen);
-        lenencIntLen = assembleLenencUnsignedLong(warnErrMsgLen, payloadBuf);
-        netTransceiver->writePacketHeaderPayloadNoFlush(payloadBuf, lenencIntLen);
-        netTransceiver->writePacketHeaderPayloadNoFlush(warnErrMsg, warnErrMsgLen);
+        netTransceiver->getWriteBufForHeaderPayload(&payloadBuf);
+        payloadLen += assembleLenencString(warnErrLevel, (payloadBuf + payloadLen));
+        payloadLen += assembleLenencString(warnErrCodeBuf, (payloadBuf + payloadLen));
+        payloadLen += assembleLenencString(warnErrMsg, (payloadBuf + payloadLen));
+        netTransceiver->writePacketHeaderNoFlush(payloadLen);
+        netTransceiver->finishWriteToBufNoFlush(payloadLen);
     }
 
     sendEOFPacketFlush();

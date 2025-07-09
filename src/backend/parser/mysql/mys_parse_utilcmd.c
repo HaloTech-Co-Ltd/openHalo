@@ -117,7 +117,7 @@ typedef struct
 /* Mys的表选项 */
 typedef struct
 {
-    int auto_increment;
+    Node *auto_increment;
     char *comment;
 } MysTableOption;
 
@@ -918,11 +918,7 @@ createAutoIncrementTriggerFunc(char *namespaceName, char *relName, char *colName
             "BEGIN "\
                 "if New.%s is not null then "\
                     "if 0 < New.%s then "\
-                        "if (select nextval('%s.%s'::regclass)) <= New.%s then "\
-                            "PERFORM setval('%s.%s'::regclass, New.%s, true); "\
-                        "else "\
-                            "PERFORM setval('%s.%s'::regclass, (select currval('%s.%s'::regclass) - 1), true); "\
-                        "end if; "\
+                        "PERFORM mysql.setval('%s.%s'::regclass, New.%s, true);"\
                     "elsif 0 = New.%s then "\
                         "New.%s = (select nextval('%s.%s'::regclass)); "\
                     "end if; "\
@@ -934,8 +930,6 @@ createAutoIncrementTriggerFunc(char *namespaceName, char *relName, char *colName
              colName,
              colName,
              namespaceName, seqName, colName,
-             namespaceName, seqName, colName,
-             namespaceName, seqName, namespaceName, seqName, 
              colName,
              colName, namespaceName, seqName,
              colName, namespaceName, seqName); 
@@ -1854,7 +1848,7 @@ MysProcessAutoIncrement(CreateStmtContext *cxt)
             seqOptions = 
                 lappend(seqOptions, 
                         makeDefElem("start", 
-                                    (Node *) makeInteger(cxt->mysTableOption->auto_increment), 
+                                    cxt->mysTableOption->auto_increment, 
                                     -1));
         }
 
@@ -1912,14 +1906,7 @@ MysProcessTableOption(CreateStmtContext *cxt, List *options)
 
         if (strcmp(option->defname, "auto_increment") == 0)
         {
-			if (IsA(option->arg, Integer))
-			{
-            	tableOption->auto_increment = intVal(option->arg);
-			}
-			else
-			{
-				elog(ERROR, "The start value of auto increment column is too large");
-			}
+            tableOption->auto_increment = option->arg;
         }
         else if (strcmp(option->defname, "comment") == 0)
         {
@@ -4626,7 +4613,7 @@ mysDropCommentForModifyColumn(CreateStmtContext *cxt, ColumnDef *column)
 static void
 mysProcessAutoIncForModifyColumn(CreateStmtContext *cxt, char *oldColName, ColumnDef *column)
 {
-    bool rename = (strcmp(oldColName, column->colname) != 0);
+    /* bool rename = (strcmp(oldColName, column->colname) != 0); */
 
     if (cxt->AutoIncrement)
     {
@@ -4669,7 +4656,7 @@ mysProcessAutoIncForModifyColumn(CreateStmtContext *cxt, char *oldColName, Colum
                 column->raw_default = (Node *)funcCallNode;
                 cxt->AutoIncrementIsIndex = true;
 
-                if (rename)
+                /* if (rename) */
                 {
                     List *stmts = NIL;
 
