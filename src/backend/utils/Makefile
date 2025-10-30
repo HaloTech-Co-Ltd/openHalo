@@ -18,7 +18,6 @@ SUBDIRS     = \
 	activity \
 	adt \
 	cache \
-	ddsm \
 	error \
 	fmgr \
 	hash \

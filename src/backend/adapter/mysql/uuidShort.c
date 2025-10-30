@@ -66,10 +66,14 @@
 #include "utils/syscache.h"
 #include "adapter/mysql/uuidShort.h"
 #include <ctype.h>
-#include <sys/sysinfo.h>
 #include <time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef __darwin__
+#include <sys/sysctl.h>
+#else
+#include <sys/sysinfo.h>
+#endif
 
 
 HTAB *globalUuidShortLock = NULL;
@@ -139,6 +143,20 @@ UuidShortShmemInit(void)
         unsigned long long serverID = 1;
         unsigned long long svrStartupTimeSecs = 0;
         time_t curTime;
+#ifdef __darwin__
+        struct timeval boottime;
+        size_t boottime_size = sizeof(boottime);
+        time(&curTime);
+        sysctlbyname("kern.boottime", NULL, &boottime_size, NULL, 0);
+
+        if (sysctlbyname("kern.boottime", &boottime, &boottime_size, NULL, 0))
+            elog(ERROR, "Failed to general uuid_short value");
+        
+        if (curTime > boottime.tv_sec) 
+            svrStartupTimeSecs = (unsigned long long) (curTime - boottime.tv_sec);
+        else
+            svrStartupTimeSecs = (unsigned long long) (boottime.tv_sec - curTime);
+#else        
         struct sysinfo info;
 
         time(&curTime);
@@ -154,6 +172,7 @@ UuidShortShmemInit(void)
         {
             svrStartupTimeSecs = (unsigned long long)(info.uptime - curTime);
         }
+#endif
         uuidShort->uuidShortVal = ((serverID & 255) << 56) + (svrStartupTimeSecs << 24);  
     }
 }

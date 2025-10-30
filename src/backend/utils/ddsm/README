@@ -1,3 +1,2 @@
 Database Dependence Supplementary Modules
-- osm: Oracle Supplementary Module
-- d2sm: Db2 Supplementary Module
+- mysm: MySQL Supplementary Module

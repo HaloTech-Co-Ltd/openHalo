@@ -24,6 +24,7 @@ SUBDIRS = \
 	backend/replication/libpqwalreceiver \
 	backend/replication/pgoutput \
 	fe_utils \
+	backend/utils/ddsm \
 	bin \
 	pl \
 	makefiles \
