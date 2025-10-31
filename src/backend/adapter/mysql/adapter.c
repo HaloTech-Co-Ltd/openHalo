@@ -161,7 +161,7 @@ bool needStartNewTrx = false;
 bool isStrictTransTablesOn = false;
 
 static bool trxNotCommit = false;
-static ulong frontEndCaps;   /* Front-End capabilities */
+static unsigned long frontEndCaps;   /* Front-End capabilities */
 static int curLastInsertIDTimes = 0;
 static bool addBeforeBeforeCurSQL = false;
 static int needAddCommitOrRollbackAfterCurSQL = 1;

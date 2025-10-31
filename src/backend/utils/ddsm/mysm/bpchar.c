@@ -60,13 +60,28 @@
 #include "adapter/mysql/adapter.h"
 
 #include "../../adt/like.c"
-#include "../../adt/varchar.c"
+#include "utils/varlena.h"
 
 PG_MODULE_MAGIC;
 
 
 // static int	text_cmp(text *arg1, text *arg2, Oid collid);
 
+static void
+check_collation_set(Oid collid)
+{
+	if (!OidIsValid(collid))
+	{
+		/*
+		 * This typically means that the parser could not resolve a conflict
+		 * of implicit collations, so report it that way.
+		 */
+		ereport(ERROR,
+				(errcode(ERRCODE_INDETERMINATE_COLLATION),
+				 errmsg("could not determine which collation to use for string comparison"),
+				 errhint("Use the COLLATE clause to set the collation explicitly.")));
+	}
+}
 
 PG_FUNCTION_INFO_V1(char_eq_char_for_date_format);
 Datum

@@ -17857,7 +17857,7 @@ SimpleTypename:
                 {
                     if ( $2 != NULL)
                     {
-                        ulong length;
+                        unsigned long length;
 
                         errno= 0;
                         length= strtoul($2, NULL, 10);
