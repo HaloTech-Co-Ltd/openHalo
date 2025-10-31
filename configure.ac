@@ -154,12 +154,12 @@ AC_SUBST(enable_nls)
 AC_SUBST(WANTED_LANGUAGES)
 
 #
-# Default port number (--with-pgport), default 1921
+# Default port number (--with-pgport), default 5432
 #
 AC_MSG_CHECKING([for default port number])
-PGAC_ARG_REQ(with, pgport, [PORTNUM], [set default port number [1921]],
+PGAC_ARG_REQ(with, pgport, [PORTNUM], [set default port number [5432]],
              [default_port=$withval],
-             [default_port=1921])
+             [default_port=5432])
 AC_MSG_RESULT([$default_port])
 # Need both of these because some places want an integer and some a string
 AC_DEFINE_UNQUOTED(DEF_PGPORT, ${default_port},
@@ -875,22 +875,6 @@ AC_MSG_RESULT([$with_python])
 AC_SUBST(with_python)
 
 #
-# Optionally build SM3 algorithm support
-#
-AC_MSG_CHECKING([whether to build SM3 algorithm support])
-PGAC_ARG_BOOL(with, sm3, yes, [do not use SM3 algorithm support])
-AC_MSG_RESULT([$with_sm3])
-AC_SUBST(with_sm3)
-
-#
-# Optionally build C2 algorithm support
-#
-AC_MSG_CHECKING([whether to build ce algorithm support])
-PGAC_ARG_BOOL(with, c2, yes, [do not use C2 algorithm support])
-AC_MSG_RESULT([$with_c2])
-AC_SUBST(with_c2)
-
-#
 # GSSAPI
 #
 AC_MSG_CHECKING([whether to build with GSSAPI support])
@@ -1193,23 +1177,6 @@ if test "$with_python" = yes; then
   PGAC_PATH_PYTHON
   PGAC_CHECK_PYTHON_EMBED_SETUP
 fi
-
-if test "$with_sm3" = no; then
-  AC_DEFINE_UNQUOTED(OPENSSL_NO_SM3, [1], [no SM3 algorithm support])
-fi
-
-if test "$with_c2" = no; then
-  AC_DEFINE_UNQUOTED(NO_C2, [1], [no C2 algorithm support])
-fi
-
-#
-# Optionally build HSM
-#
-AC_MSG_CHECKING([whether to build HSM module])
-PGAC_ARG_BOOL(with, hsm, no, [build HSM module],
-              [AC_DEFINE([USE_HSM], 1, [Define to 1 to build HSM module support. (--with-hsm)])])
-AC_MSG_RESULT([$with_hsm])
-AC_SUBST(with_hsm)
 
 if test x"$cross_compiling" = x"yes" && test -z "$with_system_tzdata"; then
   PGAC_PATH_PROGS(ZIC, zic)
@@ -2502,7 +2469,7 @@ else
 fi
 
 AC_DEFINE_UNQUOTED(PG_VERSION_STR,
-                   ["羲和(Halo) $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   ["openHalo $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
                    [A string containing the version number, platform, and C compiler])
 
 # Supply a numeric version string for use by 3rd party add-ons

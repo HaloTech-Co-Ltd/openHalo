@@ -662,7 +662,6 @@ EGREP
 GREP
 SED
 ZIC
-with_hsm
 python_additional_libs
 python_libspec
 python_libdir
@@ -718,8 +717,6 @@ with_ldap
 with_krb_srvnam
 krb_srvtab
 with_gssapi
-with_c2
-with_sm3
 with_python
 with_perl
 with_tcl
@@ -854,8 +851,6 @@ with_tcl
 with_tclconfig
 with_perl
 with_python
-with_sm3
-with_c2
 with_gssapi
 with_krb_srvnam
 with_pam
@@ -874,7 +869,6 @@ with_system_tzdata
 with_zlib
 with_lz4
 with_gnu_ld
-with_hsm
 with_ssl
 with_openssl
 enable_largefile
@@ -1549,7 +1543,7 @@ Optional Packages:
   --with-includes=DIRS    look for additional header files in DIRS
   --with-libraries=DIRS   look for additional libraries in DIRS
   --with-libs=DIRS        alternative spelling of --with-libraries
-  --with-pgport=PORTNUM   set default port number [1921]
+  --with-pgport=PORTNUM   set default port number [5432]
   --with-blocksize=BLOCKSIZE
                           set table block size in kB [8]
   --with-segsize=SEGSIZE  set table segment size in GB [1]
@@ -1562,8 +1556,6 @@ Optional Packages:
   --with-tclconfig=DIR    tclConfig.sh is in DIR
   --with-perl             build Perl modules (PL/Perl)
   --with-python           build Python modules (PL/Python)
-  --without-sm3           do not use SM3 algorithm support
-  --without-c2            do not use C2 algorithm support
   --with-gssapi           build with GSSAPI support
   --with-krb-srvnam=NAME  default service principal name in Kerberos (GSSAPI)
                           [halo]
@@ -1585,7 +1577,6 @@ Optional Packages:
   --without-zlib          do not use Zlib
   --with-lz4              build with LZ4 support
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
-  --with-hsm              build HSM module
   --with-ssl=LIB          use LIB for SSL/TLS support (openssl)
   --with-openssl          obsolete spelling of --with-ssl=openssl
 
@@ -3190,7 +3181,7 @@ $as_echo "$enable_nls" >&6; }
 
 
 #
-# Default port number (--with-pgport), default 1921
+# Default port number (--with-pgport), default 5432
 #
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for default port number" >&5
 $as_echo_n "checking for default port number... " >&6; }
@@ -3213,7 +3204,7 @@ if test "${with_pgport+set}" = set; then :
   esac
 
 else
-  default_port=1921
+  default_port=5432
 fi
 
 
@@ -8600,72 +8591,6 @@ $as_echo "$with_python" >&6; }
 
 
 #
-# Optionally build SM3 algorithm support
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build SM3 algorithm support" >&5
-$as_echo_n "checking whether to build SM3 algorithm support... " >&6; }
-
-
-
-# Check whether --with-sm3 was given.
-if test "${with_sm3+set}" = set; then :
-  withval=$with_sm3;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-sm3 option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_sm3=yes
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_sm3" >&5
-$as_echo "$with_sm3" >&6; }
-
-
-#
-# Optionally build C2 algorithm support
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build ce algorithm support" >&5
-$as_echo_n "checking whether to build ce algorithm support... " >&6; }
-
-
-
-# Check whether --with-c2 was given.
-if test "${with_c2+set}" = set; then :
-  withval=$with_c2;
-  case $withval in
-    yes)
-      :
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-c2 option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_c2=yes
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_c2" >&5
-$as_echo "$with_c2" >&6; }
-
-
-#
 # GSSAPI
 #
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build with GSSAPI support" >&5
@@ -10947,57 +10872,6 @@ $as_echo "${python_libspec} ${python_additional_libs}" >&6; }
 
 
 fi
-
-if test "$with_sm3" = no; then
-
-cat >>confdefs.h <<_ACEOF
-#define OPENSSL_NO_SM3 1
-_ACEOF
-
-fi
-
-if test "$with_c2" = no; then
-
-cat >>confdefs.h <<_ACEOF
-#define NO_C2 1
-_ACEOF
-
-fi
-
-#
-# Optionally build HSM
-#
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to build HSM module" >&5
-$as_echo_n "checking whether to build HSM module... " >&6; }
-
-
-
-# Check whether --with-hsm was given.
-if test "${with_hsm+set}" = set; then :
-  withval=$with_hsm;
-  case $withval in
-    yes)
-
-$as_echo "#define USE_HSM 1" >>confdefs.h
-
-      ;;
-    no)
-      :
-      ;;
-    *)
-      as_fn_error $? "no argument expected for --with-hsm option" "$LINENO" 5
-      ;;
-  esac
-
-else
-  with_hsm=no
-
-fi
-
-
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_hsm" >&5
-$as_echo "$with_hsm" >&6; }
-
 
 if test x"$cross_compiling" = x"yes" && test -z "$with_system_tzdata"; then
   if test -z "$ZIC"; then
@@ -20199,7 +20073,7 @@ fi
 
 
 cat >>confdefs.h <<_ACEOF
-#define PG_VERSION_STR "羲和(Halo) $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
+#define PG_VERSION_STR "openHalo $PG_VERSION_PREFIX$PG_VERSION on $host, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"
 _ACEOF
 
 
