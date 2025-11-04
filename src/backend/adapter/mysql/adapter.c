@@ -909,6 +909,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
         if (!addCommitOrRollBackBeforeCurSQL)
         {
             affectedRows = qc->nprocessed;
+            needStartNewTrx = false;
             sendOKPacket();
         }
         else 
@@ -926,6 +927,7 @@ endCommand(QueryCompletion *qc, CommandDest dest)
         inTransactionFlag = 0x0000;
         if (!addCommitOrRollBackBeforeCurSQL)
         {
+            needStartNewTrx = false;
             if (!isResetConnStmt)
             {
                 sendOKPacket();
