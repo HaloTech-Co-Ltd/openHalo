@@ -1,4 +1,6 @@
 # ![image](logo.png) openHalo
+### [Let's Discord: https://discord.gg/Ex5sK6CW]
+
 openHalo provides the capability for PostgreSQL to work with applications written for MySQL but provides much more better performance than MySQL!
 
 Migrating from legacy MySQL databases can be time-consuming and resource-intensive. When migrating your databases, you can automate the migration of your database schema and data using HMT (an opensource migration tool also opened by HaloLab, https://github.com/HaloLab001/hmt-web), but there is often more work to do to migrate the application itself, including re-writing application code that interacts with the database.
