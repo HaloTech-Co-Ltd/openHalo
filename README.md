@@ -7,6 +7,7 @@ Migrating from legacy MySQL databases can be time-consuming and resource-intensi
 
 openHalo understands the SQL dialect of MySQL, and supports the same communications protocol, so your apps that were originally written for MySQL can work with openHalo with fewer code changes. As a result, the effort required to modify and move applications running on MySQL 5.7 or newer to openHalo is reduced, leading to faster, lower-risk, and more cost-effective migrations.
 
+#### A team of students from IMT Atlantique found a greate project [OpenHalo: Compatibility Testing & Performance Benchmarking](https://github.com/fxcollot/openHaloDocumentation), thanks for their work.
 
 ### Benefits
 #### Reduce migration time and risk
