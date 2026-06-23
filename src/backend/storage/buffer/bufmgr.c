@@ -35,6 +35,7 @@
 
 #include "access/tableam.h"
 #include "access/xlog.h"
+#include "access/xlog_internal.h"
 #include "catalog/catalog.h"
 #include "catalog/storage.h"
 #include "executor/instrument.h"
@@ -487,6 +488,10 @@ static void FindAndDropRelFileNodeBuffers(RelFileNode rnode,
 										  BlockNumber firstDelBlock);
 static void AtProcExit_Buffers(int code, Datum arg);
 static void CheckForBufferLeaks(void);
+
+/* hw: add icheckpointer */
+extern int ICheckpointTimeout;
+/* hw: add icheckpointer end */
 static int	rnode_comparator(const void *p1, const void *p2);
 static inline int buffertag_comparator(const BufferTag *a, const BufferTag *b);
 static inline int ckpt_buforder_comparator(const CkptSortItem *a, const CkptSortItem *b);
@@ -1423,6 +1428,9 @@ BufferAlloc(SMgrRelation smgr, char relpersistence, ForkNumber forkNum,
 	 * just like permanent relations.
 	 */
 	buf->tag = newTag;
+	/* hw: add icheckpointer */
+	buf->ckptRingBufIndex = -1;
+	/* hw: add icheckpointer end */
 	buf_state &= ~(BM_VALID | BM_DIRTY | BM_JUST_DIRTIED |
 				   BM_CHECKPOINT_NEEDED | BM_IO_ERROR | BM_PERMANENT |
 				   BUF_USAGECOUNT_MASK);
@@ -1542,6 +1550,9 @@ retry:
 	 */
 	oldFlags = buf_state & BUF_FLAG_MASK;
 	CLEAR_BUFFERTAG(buf->tag);
+	/* hw: add icheckpointer */
+	buf->ckptRingBufIndex = -1;
+	/* hw: add icheckpointer end */
 	buf_state &= ~(BUF_FLAG_MASK | BUF_USAGECOUNT_MASK);
 	UnlockBufHdr(buf, buf_state);
 
@@ -1609,6 +1620,18 @@ MarkBufferDirty(Buffer buffer)
 			break;
 	}
 
+	/* hw: add icheckpointer */
+	if (bufHdr->ckptRingBufIndex != -1)
+	{
+		/*
+		 * The ring buffer stores WAL byte positions for LSN consistency.
+		 * BufferGetLSN() returns a real XLogRecPtr, so convert it back.
+		 */
+		ckptRingBufControl->ckptRingbufs[bufHdr->ckptRingBufIndex].highLsn =
+			XLogRecPtrToBytePos(BufferGetLSN(bufHdr));
+	}
+	/* hw: add icheckpointer end */
+
 	/*
 	 * If the buffer was not dirty already, do vacuum accounting.
 	 */
@@ -1620,6 +1643,48 @@ MarkBufferDirty(Buffer buffer)
 			VacuumCostBalance += VacuumCostPageDirty;
 	}
 }
+
+/* hw: add icheckpointer */
+void
+ckptRingBufWriteItem(Buffer buffer, XLogRecPtr lsn)
+{
+    BufferDesc *bufHdr;
+    int         writeIndex;
+    int         nextIndex;
+
+    if (ckptRingBufControl == NULL)
+        return;
+
+    if (!BufferIsValid(buffer) || BufferIsLocal(buffer))
+        return;
+
+    bufHdr = GetBufferDescriptor(buffer - 1);
+    writeIndex = ckptRingBufControl->writeIndex;
+    nextIndex = (writeIndex + 1) % ckptRingBufControl->capacity;
+
+    /*
+     * If the ring buffer is full, the icheckpointer is not keeping up.
+     * Warn and skip for now; the buffer will still be written by normal
+     * checkpoint / bgwriter path.
+     */
+    if (nextIndex == ckptRingBufControl->readIndex)
+    {
+        ereport(WARNING,
+                (errmsg("checkpoint ring buffer is full, skipping buffer %d",
+                        buffer)));
+        return;
+    }
+
+    ckptRingBufControl->ckptRingbufs[writeIndex].buffer = buffer;
+    ckptRingBufControl->ckptRingbufs[writeIndex].lowLsn = lsn;
+    ckptRingBufControl->ckptRingbufs[writeIndex].highLsn = lsn;
+    ckptRingBufControl->ckptRingbufs[writeIndex].flushed = false;
+
+    bufHdr->ckptRingBufIndex = writeIndex;
+
+    ckptRingBufControl->writeIndex = nextIndex;
+}
+/* hw: add icheckpointer end */
 
 /*
  * ReleaseAndReadBuffer -- combine ReleaseBuffer() and ReadBuffer()
@@ -2501,6 +2566,120 @@ BgBufferSync(WritebackContext *wb_context)
 	/* Return true if OK to hibernate */
 	return (bufs_to_lap == 0 && recent_alloc == 0);
 }
+
+/* hw: add icheckpointer */
+/*
+ * ckptRingBufSize -- return current number of items in checkpoint ring buffer
+ */
+static int
+ckptRingBufSize(void)
+{
+	int			size;
+
+	if (ckptRingBufControl == NULL)
+		return 0;
+
+	size = ckptRingBufControl->writeIndex - ckptRingBufControl->readIndex;
+	if (size < 0)
+		size += ckptRingBufControl->capacity;
+
+	return size;
+}
+
+/*
+ * ckptRingBufBufferSync -- flush dirty buffers from checkpoint ring buffer
+ *
+ * This is called by icheckpointer process to incrementally flush dirty
+ * buffers in FIFO order.  If force is true, flush all pending buffers.
+ *
+ * Returns true if successful.
+ */
+bool
+ckptRingBufBufferSync(WritebackContext *wb_context, bool force)
+{
+	CkptRingBufItem *ckptRingBufItem;
+	int			ckptRingBufItemNum;
+	XLogRecPtr	maxLowLsn = ckptRingBufControl->lastFlushMaxLowLsn;
+	XLogRecPtr	maxHighLsn = ckptRingBufControl->lastFlushMaxHighLsn;
+	int			count = 0;
+	int			i;
+
+	/* Nothing to do if incremental checkpoint is disabled. */
+	if (ckptRingBufControl == NULL)
+		return true;
+
+	/* Make sure we can handle the pin inside SyncOneBuffer */
+	ResourceOwnerEnlargeBuffers(CurrentResourceOwner);
+
+	ckptRingBufItemNum = ckptRingBufSize();
+
+	if (ckptRingBufItemNum > 0)
+	{
+		if (force)
+			count = ckptRingBufItemNum;
+		else
+		{
+			/*
+			 * Spread writes over the checkpoint timeout period to avoid
+			 * IO spikes.  Flush at least one buffer per call if there is
+			 * any pending work.
+			 */
+			count = ckptRingBufItemNum / ICheckpointTimeout;
+			if (count <= 0)
+				count = 1;
+		}
+	}
+
+	for (i = 0; i < count; i++)
+	{
+		int			readIndex;
+
+		readIndex = ckptRingBufControl->readIndex;
+		ckptRingBufItem = &ckptRingBufControl->ckptRingbufs[readIndex];
+
+		/*
+		 * Skip buffers that are not in shared buffer pool (e.g. unlogged
+		 * relation blocks registered via XLogRegisterBlock).
+		 */
+		if (BufferIsValid(ckptRingBufItem->buffer))
+		{
+			if (!ckptRingBufItem->flushed)
+			{
+				/* SyncOneBuffer takes a buf_id (0-based) */
+				(void) SyncOneBuffer(ckptRingBufItem->buffer - 1, false, wb_context);
+				ckptRingBufItem->flushed = true;
+			}
+		}
+		else
+		{
+			ckptRingBufItem->flushed = true;
+		}
+
+		/*
+		 * Update tracked LSNs.  The ring buffer stores WAL byte positions,
+		 * so convert them to real XLogRecPtrs before tracking recovery
+		 * points.
+		 */
+		if (!XLogRecPtrIsInvalid(ckptRingBufItem->lowLsn))
+		{
+			XLogRecPtr	lowLsn = XLogBytePosToEndRecPtr(ckptRingBufItem->lowLsn);
+
+			Assert(XLogRecPtrIsInvalid(ckptRingBufControl->lastFlushMaxLowLsn) ||
+				   ckptRingBufControl->lastFlushMaxLowLsn <= lowLsn);
+			maxLowLsn = lowLsn;
+		}
+		if (!XLogRecPtrIsInvalid(ckptRingBufItem->highLsn))
+			maxHighLsn = Max(maxHighLsn, XLogBytePosToEndRecPtr(ckptRingBufItem->highLsn));
+
+		ckptRingBufControl->readIndex = (readIndex + 1) % ckptRingBufControl->capacity;
+	}
+
+	ckptRingBufControl->lastFlushMaxHighLsn = maxHighLsn;
+	ckptRingBufControl->lastFlushMaxLowLsn = maxLowLsn;
+
+	return true;
+}
+/* hw: add icheckpointer end */
 
 /*
  * SyncOneBuffer -- process a single buffer during syncing.

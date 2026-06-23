@@ -189,6 +189,10 @@ typedef struct BufferDesc
 
 	int			wait_backend_pid;	/* backend PID of pin-count waiter */
 	int			freeNext;		/* link in freelist chain */
+
+	XLogRecPtr lowLsn;  	 	/* hw: add icheckpointer */
+	int ckptRingBufIndex; 		/* hw: add icheckpointer */
+
 	LWLock		content_lock;	/* to lock access to buffer contents */
 } BufferDesc;
 

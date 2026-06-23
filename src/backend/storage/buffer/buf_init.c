@@ -16,12 +16,20 @@
 
 #include "storage/buf_internals.h"
 #include "storage/bufmgr.h"
+#include "miscadmin.h"
+#include "postmaster/bgwriter.h"
 
 BufferDescPadded *BufferDescriptors;
 char	   *BufferBlocks;
 ConditionVariableMinimallyPadded *BufferIOCVArray;
 WritebackContext BackendWritebackContext;
 CkptSortItem *CkptBufferIds;
+
+/* hw: add icheckpointer */
+CkptRingBufControl *ckptRingBufControl = NULL;   
+int ICheckPointQueueCapacity = 16384;
+/* hw: add icheckpointer end */
+
 
 
 /*
@@ -98,6 +106,45 @@ InitBufferPool(void)
 		ShmemInitStruct("Checkpoint BufferIds",
 						NBuffers * sizeof(CkptSortItem), &foundBufCkpt);
 
+	/* hw: add icheckpointer */
+	if (!IsBootstrapProcessingMode() && enableIckpt)
+	{
+		bool foundCkptRingBufControl;
+		bool foundCkptRingBufs;
+		CkptRingBufItem *ckptRingBufs;
+
+		if (ICheckPointQueueCapacity < NBuffers)
+		{
+			elog(PANIC, "parameter icheckpointqueue_capacity is not allowed to be less than shared_buffer");
+		}
+		
+		ckptRingBufControl = (CkptRingBufControl *)
+					ShmemInitStruct("Checkpoint RingBuf Control",
+					sizeof(CkptRingBufControl), &foundCkptRingBufControl);
+
+		ckptRingBufs = (CkptRingBufItem *)
+					ShmemInitStruct("Checkpoint RingBufs",
+					(ICheckPointQueueCapacity + 1) * sizeof(CkptRingBufItem), &foundCkptRingBufs);
+
+		
+		if (foundCkptRingBufControl || foundCkptRingBufs)
+		{
+			Assert(foundCkptRingBufControl && foundCkptRingBufs);
+		}
+		else
+		{
+			ckptRingBufControl->ckptRingbufs = ckptRingBufs;
+			ckptRingBufControl->capacity = ICheckPointQueueCapacity + 1;
+			ckptRingBufControl->readIndex = ckptRingBufControl->writeIndex = 0;
+			ckptRingBufControl->lastFlushMaxLowLsn = ckptRingBufControl->lastFlushMaxHighLsn = InvalidXLogRecPtr;
+		}
+	}
+	else 
+	{
+		ckptRingBufControl = NULL;
+	}
+	/* hw: add icheckpointer end */
+
 	if (foundDescs || foundBufs || foundIOCV || foundBufCkpt)
 	{
 		/* should find all of these, or none of them */
@@ -121,6 +168,9 @@ InitBufferPool(void)
 			buf->wait_backend_pid = 0;
 
 			buf->buf_id = i;
+
+			// hw: add icheckpointer
+			buf->ckptRingBufIndex = -1;
 
 			/*
 			 * Initially link all the buffers together as unused. Subsequent
@@ -176,6 +226,18 @@ BufferShmemSize(void)
 
 	/* size of checkpoint sort array in bufmgr.c */
 	size = add_size(size, mul_size(NBuffers, sizeof(CkptSortItem)));
+
+	/* hw: add icheckpointer */
+	if (!IsBootstrapProcessingMode())
+	{
+		if (ICheckPointQueueCapacity < NBuffers)
+		{
+			elog(PANIC, "parameter icheckpointqueue_capacity is not allowed to be less than shared_buffer");
+		}
+		size = add_size(size, mul_size(ICheckPointQueueCapacity + 1, sizeof(CkptRingBufItem)));
+		size = add_size(size, sizeof(CkptRingBufControl));
+	}
+	/* hw: add icheckpointer end */
 
 	return size;
 }

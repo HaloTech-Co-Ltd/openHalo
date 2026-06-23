@@ -333,4 +333,10 @@ extern bool InArchiveRecovery;
 extern bool StandbyMode;
 extern char *recoveryRestoreCommand;
 
+/* hw: add icheckpointer */
+extern XLogRecPtr XLogBytePosToRecPtr(uint64 bytepos);
+extern XLogRecPtr XLogBytePosToEndRecPtr(uint64 bytepos);
+extern uint64 XLogRecPtrToBytePos(XLogRecPtr ptr);
+/* hw: add icheckpointer end */
+
 #endif							/* XLOG_INTERNAL_H */

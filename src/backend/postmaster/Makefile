@@ -12,10 +12,12 @@ subdir = src/backend/postmaster
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 
+# hw: add icheckpointer
 OBJS = \
 	autovacuum.o \
 	bgworker.o \
 	bgwriter.o \
+	icheckpointer.o \
 	checkpointer.o \
 	fork_process.o \
 	interrupt.o \
@@ -25,6 +27,6 @@ OBJS = \
 	startup.o \
 	syslogger.o \
 	walwriter.o
-	
+
 
 include $(top_srcdir)/src/backend/common.mk

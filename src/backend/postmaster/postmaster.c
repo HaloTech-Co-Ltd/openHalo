@@ -140,6 +140,7 @@
 #include "utils/timestamp.h"
 #include "utils/varlena.h"
 #include "parser/parsereng.h"
+#include "storage/bufmgr.h" // hw: add icheckpointer
 
 #ifdef EXEC_BACKEND
 #include "storage/spin.h"
@@ -265,7 +266,9 @@ static pid_t StartupPID = 0,
 			AutoVacPID = 0,
 			PgArchPID = 0,
 			PgStatPID = 0,
-			SysLoggerPID = 0;
+			SysLoggerPID = 0,
+			// hw: add icheckpointer
+			ICheckpointerPID = 0;
 
 /* Startup process's status */
 typedef enum
@@ -568,6 +571,8 @@ static void ShmemBackendArrayRemove(Backend *bn);
 #define StartCheckpointer()		StartChildProcess(CheckpointerProcess)
 #define StartWalWriter()		StartChildProcess(WalWriterProcess)
 #define StartWalReceiver()		StartChildProcess(WalReceiverProcess)
+// hw: add icheckpointer
+#define StartICheckpointer() 	StartChildProcess(ICheckpointerProcess)
 
 /* Macros to check exit status of a child process */
 #define EXIT_STATUS_0(st)  ((st) == 0)
@@ -1808,6 +1813,10 @@ ServerLoop(void)
 			if (BgWriterPID == 0)
 				BgWriterPID = StartBackgroundWriter();
 		}
+
+		// hw: add icheckpointer
+		if (ICheckpointerPID == 0 && pmState == PM_RUN && ckptRingBufControl != NULL)
+			ICheckpointerPID = StartICheckpointer();
 
 		/*
 		 * Likewise, if we have lost the walwriter process, try to start a new
@@ -3095,9 +3104,13 @@ reaper(SIGNAL_ARGS)
 				CheckpointerPID = StartCheckpointer();
 			if (BgWriterPID == 0)
 				BgWriterPID = StartBackgroundWriter();
-
+				
 			if (WalWriterPID == 0)
 				WalWriterPID = StartWalWriter();
+
+			// hw: add icheckpointer
+			 if (ICheckpointerPID == 0)
+				ICheckpointerPID = StartICheckpointer();
 
 			/*
 			 * Likewise, start other special children as needed.  In a restart
@@ -3137,6 +3150,16 @@ reaper(SIGNAL_ARGS)
 			if (!EXIT_STATUS_0(exitstatus))
 				HandleChildCrash(pid, exitstatus,
 								 _("background writer process"));
+			continue;
+		}
+
+		// hw: add icheckpointer
+		if (pid == ICheckpointerPID)
+		{
+			ICheckpointerPID = 0;
+			if (!EXIT_STATUS_0(exitstatus))
+				HandleChildCrash(pid, exitstatus,
+								 _("icheckpointer process"));
 			continue;
 		}
 
@@ -3738,6 +3761,14 @@ HandleChildCrash(int pid, int exitstatus, const char *procname)
 		allow_immediate_pgstat_restart();
 	}
 
+	// hw: add icheckpointer
+	if (pid == ICheckpointerPID)
+		ICheckpointerPID = 0;
+	else if (ICheckpointerPID != 0 && take_action)
+		signal_child(ICheckpointerPID, SIGQUIT);  // sigquit_child 
+
+
+
 	/* We do NOT restart the syslogger */
 
 	if (Shutdown != ImmediateShutdown)
@@ -3885,6 +3916,11 @@ PostmasterStateMachine(void)
 			signal_child(StartupPID, SIGTERM);
 		if (WalReceiverPID != 0)
 			signal_child(WalReceiverPID, SIGTERM);
+
+		// hw: add icheckpointer
+		if (ICheckpointerPID != 0)
+			signal_child(ICheckpointerPID, SIGTERM);
+
 		/* checkpointer, archiver, stats, and syslogger may continue for now */
 
 		/* Now transition to PM_WAIT_BACKENDS state to wait for them to die */
@@ -3915,7 +3951,8 @@ PostmasterStateMachine(void)
 			(CheckpointerPID == 0 ||
 			 (!FatalError && Shutdown < ImmediateShutdown)) &&
 			WalWriterPID == 0 &&
-			AutoVacPID == 0)
+			AutoVacPID == 0 &&
+			ICheckpointerPID == 0) // hw: add icheckpointer
 		{
 			if (Shutdown >= ImmediateShutdown || FatalError)
 			{
@@ -5558,6 +5595,11 @@ StartChildProcess(AuxProcType type)
 			case WalReceiverProcess:
 				ereport(LOG,
 						(errmsg("could not fork WAL receiver process: %m")));
+				break;
+		    // hw: add icheckpointer
+			case ICheckpointerProcess:
+				ereport(LOG,
+						(errmsg("could not fork icheckpointer process: %m")));
 				break;
 			default:
 				ereport(LOG,

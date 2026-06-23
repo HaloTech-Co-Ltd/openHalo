@@ -85,6 +85,12 @@
 
 extern uint32 bootstrap_data_checksum_version;
 
+/* hw: add icheckpointer */
+extern int registeredBufferForCkptRingBuf[];
+extern int registeredBufferForCkptRingBufNum;
+extern void ckptRingBufWriteItem(Buffer buffer, XLogRecPtr lsn);
+/* hw: add icheckpointer end */
+
 /* Unsupported old recovery command file names (relative to $PGDATA) */
 #define RECOVERY_COMMAND_FILE	"recovery.conf"
 #define RECOVERY_COMMAND_DONE	"recovery.done"
@@ -723,6 +729,11 @@ typedef struct XLogCtlData
 	 */
 	XLogRecPtr	lastCheckPointRecPtr;
 	XLogRecPtr	lastCheckPointEndPtr;
+	/* hw: add icheckpointer */
+	XLogRecPtr	sharedStorageLastCheckPointRedoPtr;
+	XLogRecPtr	sharedStorageLastFlushedMaxLowLsn pg_attribute_aligned(8);
+	XLogRecPtr	sharedStorageLastFlushedMaxHighLsn pg_attribute_aligned(8);
+	/* hw: add icheckpointer end */
 	CheckPoint	lastCheckPoint;
 
 	/*
@@ -993,9 +1004,9 @@ static bool ReserveXLogSwitch(XLogRecPtr *StartPos, XLogRecPtr *EndPos,
 							  XLogRecPtr *PrevPtr);
 static XLogRecPtr WaitXLogInsertionsToFinish(XLogRecPtr upto);
 static char *GetXLogBuffer(XLogRecPtr ptr);
-static XLogRecPtr XLogBytePosToRecPtr(uint64 bytepos);
-static XLogRecPtr XLogBytePosToEndRecPtr(uint64 bytepos);
-static uint64 XLogRecPtrToBytePos(XLogRecPtr ptr);
+extern XLogRecPtr XLogBytePosToRecPtr(uint64 bytepos);
+extern XLogRecPtr XLogBytePosToEndRecPtr(uint64 bytepos);
+extern uint64 XLogRecPtrToBytePos(XLogRecPtr ptr);
 static void checkXLogConsistency(XLogReaderState *record);
 
 static void WALInsertLockAcquire(void);
@@ -1323,6 +1334,7 @@ ReserveXLogInsertLocation(int size, XLogRecPtr *StartPos, XLogRecPtr *EndPos,
 	uint64		startbytepos;
 	uint64		endbytepos;
 	uint64		prevbytepos;
+	int			index;
 
 	size = MAXALIGN(size);
 
@@ -1346,6 +1358,13 @@ ReserveXLogInsertLocation(int size, XLogRecPtr *StartPos, XLogRecPtr *EndPos,
 	prevbytepos = Insert->PrevBytePos;
 	Insert->CurrBytePos = endbytepos;
 	Insert->PrevBytePos = startbytepos;
+
+	/* hw: add icheckpointer */
+	for (index = 0; index < registeredBufferForCkptRingBufNum; index++)
+	{
+		ckptRingBufWriteItem(registeredBufferForCkptRingBuf[index], endbytepos);
+	}
+	/* hw: add icheckpointer end */
 
 	SpinLockRelease(&Insert->insertpos_lck);
 
@@ -2027,7 +2046,7 @@ GetXLogBuffer(XLogRecPtr ptr)
  * is the position starting from the beginning of WAL, excluding all WAL
  * page headers.
  */
-static XLogRecPtr
+XLogRecPtr
 XLogBytePosToRecPtr(uint64 bytepos)
 {
 	uint64		fullsegs;
@@ -2067,7 +2086,7 @@ XLogBytePosToRecPtr(uint64 bytepos)
  * not to where the first xlog record on that page would go to. This is used
  * when converting a pointer to the end of a record.
  */
-static XLogRecPtr
+XLogRecPtr
 XLogBytePosToEndRecPtr(uint64 bytepos)
 {
 	uint64		fullsegs;
@@ -2110,7 +2129,7 @@ XLogBytePosToEndRecPtr(uint64 bytepos)
 /*
  * Convert an XLogRecPtr to a "usable byte position".
  */
-static uint64
+uint64
 XLogRecPtrToBytePos(XLogRecPtr ptr)
 {
 	uint64		fullsegs;
@@ -13331,3 +13350,45 @@ XLogRequestWalReceiverReply(void)
 {
 	doRequestWalReceiverReply = true;
 }
+
+/* hw: add icheckpointer */
+
+XLogRecPtr
+getSharedStorageLastCheckPointRedoPtr(void)
+{
+    XLogRecPtr sharedStorageLastCheckPointRedoPtr;
+    SpinLockAcquire(&XLogCtl->info_lck);
+    sharedStorageLastCheckPointRedoPtr = XLogCtl->sharedStorageLastCheckPointRedoPtr;
+    SpinLockRelease(&XLogCtl->info_lck);
+    return sharedStorageLastCheckPointRedoPtr;
+}
+
+void
+setSharedStorageLastCheckPointEndPtr(XLogRecPtr lsn)
+{
+    SpinLockAcquire(&XLogCtl->info_lck);
+    if (lsn > XLogCtl->sharedStorageLastCheckPointRedoPtr)
+        XLogCtl->sharedStorageLastCheckPointRedoPtr = lsn;
+    SpinLockRelease(&XLogCtl->info_lck);
+}
+
+XLogRecPtr
+getSharedStorageIckptMaxLowLsn(void)
+{
+    return XLogCtl->sharedStorageLastFlushedMaxLowLsn;
+}
+
+XLogRecPtr
+getSharedStorageIckptMaxHighLsn(void)
+{
+    return XLogCtl->sharedStorageLastFlushedMaxHighLsn;
+}
+
+void
+setSharedStorageIckptInfo(XLogRecPtr maxLowLsn, XLogRecPtr maxHighLsn)
+{
+    XLogCtl->sharedStorageLastFlushedMaxHighLsn = Max(XLogCtl->sharedStorageLastFlushedMaxHighLsn, maxHighLsn);
+    XLogCtl->sharedStorageLastFlushedMaxLowLsn = maxLowLsn;
+}
+
+/* hw: add icheckpointer */

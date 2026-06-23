@@ -27,8 +27,15 @@ extern int	CheckPointTimeout;
 extern int	CheckPointWarning;
 extern double CheckPointCompletionTarget;
 
+/* hw: add icheckpointer */
+extern PGDLLIMPORT int ICheckpointTimeout;
+extern PGDLLIMPORT bool enableIckpt;
+/* hw: add icheckpointer */
+
 extern void BackgroundWriterMain(void) pg_attribute_noreturn();
 extern void CheckpointerMain(void) pg_attribute_noreturn();
+// hw: add icheckpointer
+extern void ICheckpointerMain(void) pg_attribute_noreturn();
 
 extern void RequestCheckpoint(int flags);
 extern void CheckpointWriteDelay(int flags, double progress);

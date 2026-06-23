@@ -277,6 +277,10 @@ GetBackendTypeDesc(BackendType backendType)
 		case B_LOGGER:
 			backendDesc = "logger";
 			break;
+		// hw: add icheckpointer
+		case B_ICHECKPOINTER:
+			backendDesc = "icheckpointer";
+			break;
 	}
 
 	return backendDesc;

@@ -333,6 +333,10 @@ AuxiliaryProcessMain(int argc, char *argv[])
 		case WalReceiverProcess:
 			MyBackendType = B_WAL_RECEIVER;
 			break;
+		// hw: add icheckpointer
+		case ICheckpointerProcess:
+			MyBackendType = B_ICHECKPOINTER;
+			break;
 		default:
 			MyBackendType = B_INVALID;
 	}
@@ -466,6 +470,11 @@ AuxiliaryProcessMain(int argc, char *argv[])
 
 		case WalReceiverProcess:
 			WalReceiverMain();
+			proc_exit(1);
+
+		// hw: add icheckpointer
+		case ICheckpointerProcess:
+			ICheckpointerMain();
 			proc_exit(1);
 
 		default:
