@@ -335,7 +335,9 @@ typedef enum BackendType
 	B_WAL_WRITER,
 	B_ARCHIVER,
 	B_STATS_COLLECTOR,
-	B_LOGGER
+	B_LOGGER,
+	// hw: add icheckpointer
+	B_ICHECKPOINTER,
 } BackendType;
 
 extern BackendType MyBackendType;
@@ -440,6 +442,8 @@ typedef enum
 	CheckpointerProcess,
 	WalWriterProcess,
 	WalReceiverProcess,
+	// hw: add icheckpointer
+	ICheckpointerProcess,
 
 	NUM_AUXPROCTYPES			/* Must be last! */
 } AuxProcType;

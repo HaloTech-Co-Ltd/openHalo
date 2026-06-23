@@ -55,6 +55,29 @@ typedef struct PrefetchBufferResult
 	bool		initiated_io;	/* If true, a miss resulting in async I/O */
 } PrefetchBufferResult;
 
+/* hw: add icheckpointer */
+typedef struct CkptRingBufItem
+{
+	XLogRecPtr lowLsn;	 /* first Lsn modify this buffer after flush */
+	XLogRecPtr highLsn;  /* last Lsn modify this buffer after flush */
+	int buffer;
+	bool flushed;
+} CkptRingBufItem;	
+
+typedef struct CkptRingBufControl
+{
+	CkptRingBufItem *ckptRingbufs;
+	XLogRecPtr lastFlushMaxLowLsn pg_attribute_aligned(8);
+	XLogRecPtr lastFlushMaxHighLsn pg_attribute_aligned(8); 
+	int capacity;
+	int writeIndex;
+	int readIndex;
+} CkptRingBufControl;	
+
+extern CkptRingBufControl *ckptRingBufControl;
+/* hw: add icheckpointer end */
+
+
 /* forward declared, to avoid having to expose buf_internals.h here */
 struct WritebackContext;
 
@@ -222,6 +245,11 @@ extern void PrintPinnedBufs(void);
 extern Size BufferShmemSize(void);
 extern void BufferGetTag(Buffer buffer, RelFileNode *rnode,
 						 ForkNumber *forknum, BlockNumber *blknum);
+
+/* hw: add icheckpointer */
+extern void ckptRingBufWriteItem(Buffer buffer, XLogRecPtr lsn);
+extern bool ckptRingBufBufferSync(struct WritebackContext *wb_context, bool force);
+/* hw: add icheckpointer end */
 
 extern void MarkBufferDirtyHint(Buffer buffer, bool buffer_std);
 

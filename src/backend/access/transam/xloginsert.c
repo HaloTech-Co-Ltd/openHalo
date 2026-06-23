@@ -65,6 +65,11 @@ static registered_buffer *registered_buffers;
 static int	max_registered_buffers; /* allocated size */
 static int	max_registered_block_id = 0;	/* highest block_id + 1 currently
 											 * registered */
+/* hw: add icheckpointer */
+#define registeredBufferForCkptRingBufSize 1024
+int			registeredBufferForCkptRingBuf[registeredBufferForCkptRingBufSize] = {0};
+int			registeredBufferForCkptRingBufNum;
+/* hw: add icheckpointer end */
 
 /*
  * A chain of XLogRecDatas to hold the "main data" of a WAL record, registered
@@ -209,6 +214,10 @@ XLogResetInsertion(void)
 	mainrdata_len = 0;
 	mainrdata_last = (XLogRecData *) &mainrdata_head;
 	curinsert_flags = 0;
+
+	// hw: add icheckpointer
+	registeredBufferForCkptRingBufNum = 0;
+
 	begininsert_called = false;
 }
 
@@ -231,6 +240,11 @@ XLogRegisterBuffer(uint8 block_id, Buffer buffer, uint8 flags)
 			elog(ERROR, "too many registered buffers");
 		max_registered_block_id = block_id + 1;
 	}
+
+	/* hw: add icheckpointer */
+	registeredBufferForCkptRingBuf[registeredBufferForCkptRingBufNum] = buffer;
+	registeredBufferForCkptRingBufNum++;
+	/* hw: add icheckpointer end */
 
 	regbuf = &registered_buffers[block_id];
 
@@ -284,6 +298,11 @@ XLogRegisterBlock(uint8 block_id, RelFileNode *rnode, ForkNumber forknum,
 
 	if (block_id >= max_registered_buffers)
 		elog(ERROR, "too many registered buffers");
+
+	/* hw: add icheckpointer */
+	registeredBufferForCkptRingBuf[registeredBufferForCkptRingBufNum] = InvalidBuffer;
+	registeredBufferForCkptRingBufNum++;
+	/* hw: add icheckpointer end */
 
 	regbuf = &registered_buffers[block_id];
 
@@ -1088,21 +1107,37 @@ log_newpages(RelFileNode *rnode, ForkNumber forkNum, int num_pages,
  * space between pd_lower and pd_upper, set 'page_std' to true. That allows
  * the unused space to be left out from the WAL record, making it smaller.
  */
+
+ /* hw: add icheckpointer */
 XLogRecPtr
 log_newpage_buffer(Buffer buffer, bool page_std)
 {
 	Page		page = BufferGetPage(buffer);
-	RelFileNode rnode;
-	ForkNumber	forkNum;
-	BlockNumber blkno;
+	int flags;
+	XLogRecPtr recptr;
+
+	flags = REGBUF_FORCE_IMAGE;
+	if (page_std)
+		flags |= REGBUF_STANDARD;
 
 	/* Shared buffers should be modified in a critical section. */
 	Assert(CritSectionCount > 0);
 
-	BufferGetTag(buffer, &rnode, &forkNum, &blkno);
+	XLogBeginInsert();
+	XLogRegisterBuffer(0, buffer, flags);
+	recptr = XLogInsert(RM_XLOG_ID, XLOG_FPI);
 
-	return log_newpage(&rnode, forkNum, blkno, page, page_std);
+	/* the page may be uninitialized. If so, we can't set the LSN 
+	 * because that would corrupt the page. 
+	 */
+	if (!PageIsNew(page))
+	{
+		PageSetLSN(page, recptr);
+	}
+
+	return recptr; 
 }
+ /* hw: add icheckpointer end */
 
 /*
  * WAL-log a range of blocks in a relation.
