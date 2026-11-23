@@ -30,6 +30,7 @@
 #include "access/parallel.h"
 #include "catalog/pg_statistic.h"
 #include "commands/tablespace.h"
+#include "executor/halo_pmc.h"
 #include "executor/execdebug.h"
 #include "executor/hashjoin.h"
 #include "executor/nodeHash.h"
@@ -60,7 +61,7 @@ static void *dense_alloc(HashJoinTable hashtable, Size size);
 static HashJoinTuple ExecParallelHashTupleAlloc(HashJoinTable hashtable,
 												size_t size,
 												dsa_pointer *shared);
-static void MultiExecPrivateHash(HashState *node);
+static void MultiExecPrivateHash(HashState *node, HaloPmc *pmc);
 static void MultiExecParallelHash(HashState *node);
 static inline HashJoinTuple ExecParallelHashFirstTuple(HashJoinTable table,
 													   int bucketno);
@@ -112,7 +113,25 @@ MultiExecHash(HashState *node)
 	if (node->parallel_state != NULL)
 		MultiExecParallelHash(node);
 	else
-		MultiExecPrivateHash(node);
+	{
+		HaloPmc    *pmc = HaloPmcBegin();
+
+		if (pmc == NULL)
+			MultiExecPrivateHash(node, NULL);
+		else
+		{
+			PG_TRY();
+			{
+				MultiExecPrivateHash(node, pmc);
+				HaloPmcReport(pmc);
+			}
+			PG_FINALLY();
+			{
+				HaloPmcClose(pmc);
+			}
+			PG_END_TRY();
+		}
+	}
 
 	/* must provide our own instrumentation support */
 	if (node->ps.instrument)
@@ -136,7 +155,7 @@ MultiExecHash(HashState *node)
  * ----------------------------------------------------------------
  */
 static void
-MultiExecPrivateHash(HashState *node)
+MultiExecPrivateHash(HashState *node, HaloPmc *pmc)
 {
 	PlanState  *outerNode;
 	List	   *hashkeys;
@@ -144,6 +163,7 @@ MultiExecPrivateHash(HashState *node)
 	TupleTableSlot *slot;
 	ExprContext *econtext;
 	uint32		hashvalue;
+	bool		measure_segment = HaloPmcSegmentEnabled(pmc);
 
 	/*
 	 * get state info from node
@@ -166,6 +186,8 @@ MultiExecPrivateHash(HashState *node)
 		slot = ExecProcNode(outerNode);
 		if (TupIsNull(slot))
 			break;
+		if (measure_segment)
+			HaloPmcBeforeTuple(pmc);
 		/* We have to compute the hash value */
 		econtext->ecxt_outertuple = slot;
 		if (ExecHashGetHashValue(hashtable, econtext, hashkeys,
@@ -189,6 +211,8 @@ MultiExecPrivateHash(HashState *node)
 			}
 			hashtable->totalTuples += 1;
 		}
+		if (measure_segment)
+			HaloPmcAfterTuple(pmc);
 	}
 
 	/* resize the hash table if needed (NTUP_PER_BUCKET exceeded) */
