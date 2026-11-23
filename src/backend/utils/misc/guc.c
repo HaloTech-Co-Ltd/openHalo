@@ -17,6 +17,7 @@
  */
 #include "postgres.h"
 
+#include "executor/halo_pmc.h"
 #include <ctype.h>
 #include <float.h>
 #include <math.h>
@@ -996,6 +997,16 @@ static const unit_conversion time_unit_conversion_table[] =
 
 static struct config_bool ConfigureNamesBool[] =
 {
+	{
+		{"halo_pmc_segment", PGC_SUSET, STATS_MONITORING,
+			gettext_noop("Measures the hash tuple body with paired RDPMC snapshots."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&halo_pmc_segment,
+		false,
+		NULL, NULL, NULL
+	},
 	{
 		{"enable_seqscan", PGC_USERSET, QUERY_TUNING_METHOD,
 			gettext_noop("Enables the planner's use of sequential-scan plans."),
@@ -3947,6 +3958,17 @@ static struct config_real ConfigureNamesReal[] =
 
 static struct config_string ConfigureNamesString[] =
 {
+	{
+		{"halo_pmc_list", PGC_SUSET, STATS_MONITORING,
+			gettext_noop("Selects performance events for private hash builds."),
+			NULL,
+			GUC_LIST_INPUT | GUC_NOT_IN_SAMPLE
+		},
+		&halo_pmc_list,
+		"",
+		NULL, NULL, NULL
+	},
+
 	{
 		{"archive_command", PGC_SIGHUP, WAL_ARCHIVING,
 			gettext_noop("Sets the shell command that will be called to archive a WAL file."),

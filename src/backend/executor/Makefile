@@ -31,6 +31,7 @@ OBJS = \
 	execTuples.o \
 	execUtils.o \
 	functions.o \
+	halo_pmc.o \
 	instrument.o \
 	nodeAgg.o \
 	nodeAppend.o \
